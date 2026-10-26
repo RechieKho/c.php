@@ -12,7 +12,10 @@ for (const t of ['cmake', 'clangd', 'php']) {
   if (spawnSync(t, ['--version']).error) { console.log(`skip proxy test: ${t} not found`); process.exit(0); }
 }
 const build = fs.mkdtempSync(path.join(os.tmpdir(), 'cphp-proxy-'));
-for (const args of [['-S', root, '-B', build, '-DCPHP_BUILD_EXAMPLES=ON'], ['--build', build]]) {
+// Visual Studio generators (the Windows default) cannot export compile_commands.json, which
+// the proxy needs to find generated siblings and libs.json.
+const gen = spawnSync('ninja', ['--version']).error ? [] : ['-G', 'Ninja'];
+for (const args of [['-S', root, '-B', build, ...gen, '-DCPHP_BUILD_EXAMPLES=ON'], ['--build', build]]) {
   const r = spawnSync('cmake', args, { encoding: 'utf8' });
   if (r.status !== 0) { console.log(r.stdout + r.stderr); process.exit(1); }
 }
