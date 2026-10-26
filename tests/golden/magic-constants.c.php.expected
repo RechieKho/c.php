@@ -1,0 +1,4 @@
+#line 2 "@DIR@/magic-constants.c.php"
+const char *tpl = "magic-constants.c.php";
+const char *dir = "golden";
+int line = 4;

@@ -18,6 +18,12 @@ check('language uses filenamePatterns (built-in php owns the .php extension)', (
   assert(l.filenamePatterns.includes('*.c.php') && !(l.extensions || []).length);
 });
 
+check('breakpoints allowed in cphp templates; formatting off', () => {
+  assert(pkg.contributes.breakpoints.some((b) => b.language === 'cphp'));
+  const d = pkg.contributes.configurationDefaults['[cphp]'];
+  assert(d['editor.formatOnSave'] === false && d['editor.formatOnPaste'] === false && d['editor.formatOnType'] === false);
+});
+
 // ---- problem matchers ----
 const matcher = (n) => new RegExp(pkg.contributes.problemMatchers.find((m) => m.name === n).pattern.regexp);
 check('cphp-gcc matches #line-mapped error', () => {

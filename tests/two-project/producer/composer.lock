@@ -1,0 +1,46 @@
+{
+    "_readme": [
+        "This file locks the dependencies of your project to a known state",
+        "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
+        "This file is @generated automatically"
+    ],
+    "content-hash": "aa08a1bcf5839b579dd37d46968fbdc5",
+    "packages": [
+        {
+            "name": "rechie/producer",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "participants/rechie/producer",
+                "reference": "73204bc734d66151ec77c9ef122cdb819d7d6a0c"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Producer\\": "php-src/"
+                },
+                "classmap": [
+                    "legacy/"
+                ],
+                "files": [
+                    "legacy/helpers.inc"
+                ]
+            },
+            "transport-options": {
+                "symlink": false,
+                "relative": true
+            }
+        }
+    ],
+    "packages-dev": [],
+    "aliases": [],
+    "minimum-stability": "dev",
+    "stability-flags": {
+        "rechie/producer": 20
+    },
+    "prefer-stable": true,
+    "prefer-lowest": false,
+    "platform": {},
+    "platform-dev": {},
+    "plugin-api-version": "2.9.0"
+}

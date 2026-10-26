@@ -1,0 +1,4 @@
+#line 3 "@DIR@/operators.c.php"
+int op_add(int a, int b) { return a + b; }
+#line 3 "@DIR@/operators.c.php"
+int op_sub(int a, int b) { return a - b; }

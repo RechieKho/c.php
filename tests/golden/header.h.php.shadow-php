@@ -1,0 +1,4 @@
+            
+<?php foreach (['x', 'y'] as $f): ?>
+        <?= $f ?>       
+<?php endforeach ?>

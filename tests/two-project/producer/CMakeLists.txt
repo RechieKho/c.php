@@ -8,6 +8,8 @@ target_include_directories(producer PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include>)
 cphp_export_php(producer DIRECTORY php NAME producer)
 cphp_use_composer(producer)
+cphp_add_sources(producer gen/limits.h.php)
+cphp_export_headers(producer)
 install(TARGETS producer EXPORT producerTargets ARCHIVE DESTINATION lib)
 install(DIRECTORY include/ DESTINATION include)
 install(EXPORT producerTargets NAMESPACE producer:: DESTINATION lib/cmake/producer)

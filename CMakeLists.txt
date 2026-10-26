@@ -30,6 +30,16 @@ if(PROJECT_IS_TOP_LEVEL)
     if(CPHP_PHP_EXECUTABLE)
       add_test(NAME cphp_shadow
         COMMAND "${CPHP_PHP_EXECUTABLE}" -d short_open_tag=0 "${CMAKE_CURRENT_LIST_DIR}/tests/shadow-test.php")
+      add_test(NAME cphp_golden
+        COMMAND "${CPHP_PHP_EXECUTABLE}" -d short_open_tag=0 "${CMAKE_CURRENT_LIST_DIR}/tests/run-golden.php")
+    endif()
+    # The proxy e2e test configures its own build tree; it skips itself without clangd/php.
+    find_program(CPHP_NODE_EXECUTABLE node)
+    if(CPHP_NODE_EXECUTABLE)
+      add_test(NAME cphp_proxy
+        COMMAND "${CPHP_NODE_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/editor/lsp-proxy/test/proxy-test.js")
+      add_test(NAME cphp_proxy_stub
+        COMMAND "${CPHP_NODE_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/editor/lsp-proxy/test/proxy-stub-test.js")
     endif()
   endif()
 endif()

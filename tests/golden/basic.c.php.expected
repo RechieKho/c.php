@@ -1,0 +1,6 @@
+#line 1 "@DIR@/basic.c.php"
+#include <stdio.h>
+#line 4 "@DIR@/basic.c.php"
+int get_a(void) { return 97; }
+#line 4 "@DIR@/basic.c.php"
+int get_b(void) { return 98; }

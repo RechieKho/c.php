@@ -1,0 +1,4 @@
+#line 1 "@DIR@/unicode.c.php"
+// héllo 😀
+#line 3 "@DIR@/unicode.c.php"
+const char *s = "ü😀";

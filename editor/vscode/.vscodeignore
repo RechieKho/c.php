@@ -1,8 +1,8 @@
 test/**
 scripts/**
-node_modules/vscode-oniguruma/**
-node_modules/vscode-textmate/**
-node_modules/@vscode/**
-node_modules/.bin/**
+node_modules/**
+extension.js
+discovery.js
 **/*.map
 .gitignore
+*.vsix

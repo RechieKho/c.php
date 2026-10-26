@@ -1,0 +1,3 @@
+#line 1 "@DIR@/bare-open-tag.c.php"
+int a = b <? c;
+int d;

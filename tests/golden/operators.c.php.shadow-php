@@ -1,0 +1,4 @@
+<?php $ops = ['add' => '+', 'sub' => '-']; ?>
+<?php foreach ($ops as $name => $sym): ?>
+       <?= $name ?>                          <?= $sym ?>     
+<?php endforeach ?>

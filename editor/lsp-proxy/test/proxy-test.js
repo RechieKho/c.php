@@ -65,6 +65,22 @@ const check = async (name, fn) => { try { await fn(); console.log('ok   ' + name
     const d = await req('textDocument/definition', { textDocument: { uri: tplUri }, position: { line: 4, character: 5 } });
     assert(d.result && d.result.length >= 1 && d.result[0].uri.startsWith('file:'));
   });
+  await check("definition on cphp('lib/file.php') uses libs.json", async () => {
+    const libDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cphp-lib-'));
+    fs.writeFileSync(path.join(libDir, 'macros.php'), '<?php\n');
+    const lj = path.join(build, 'tests/example-project/cphp/libs.json');
+    fs.writeFileSync(lj, JSON.stringify({ cphpVersion: 'x', libs: { demo: libDir.replace(/\\/g, '/') } }));
+    const text = "<?php require cphp('demo/macros.php'); ?>\n";
+    const u = pathToFileURL(path.join(root, 'tests/example-project/other.c.php')).href;
+    note('textDocument/didOpen', { textDocument: { uri: u, languageId: 'cphp', version: 1, text } });
+    const col = text.indexOf('demo') + 1;
+    const d = await req('textDocument/definition', { textDocument: { uri: u }, position: { line: 0, character: col } });
+    assert.strictEqual(d.result[0].uri, pathToFileURL(path.join(libDir, 'macros.php')).href);
+    const none = await req('textDocument/definition', { textDocument: { uri: u }, position: { line: 0, character: 2 } });
+    assert(!none.result || !none.result.some((l) => l.uri.endsWith('macros.php')));
+    note('textDocument/didClose', { textDocument: { uri: u } });
+    fs.rmSync(libDir, { recursive: true, force: true });
+  });
   diags.length = 0;
   note('textDocument/didChange', { textDocument: { uri: tplUri, version: 2 }, contentChanges: [{ text: src }] });
   await check('didChange: error disappears', async () => {

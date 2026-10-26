@@ -1,0 +1,15 @@
+<?php $n = 3; ?>
+        <?= $n ?> 
+<?php if ($n > 1) { ?>
+      
+<?php } ?>
+
+      <?php $x = 1; ?>         <?= $x ?>  <?php // line comment ?>
+      
+<?php
+$items = ['p', 'q'];
+foreach ($items as $i) {
+    echo "int v_$i;\n";
+}
+?>
+      

@@ -1,0 +1,4 @@
+<?php $base = basename(__FILE__); ?>
+                   <?= $base ?>  
+                   <?= basename(__DIR__) ?>  
+           <?= __LINE__ ?> 

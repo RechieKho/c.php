@@ -128,24 +128,55 @@
           "default": [],
           "scope": "resource",
           "description": "Extra clangd arguments."
+        },
+        "cphp.phpServer": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "description": "PHP language server executable (e.g. intelephense or phpactor language-server) for the PHP parts of templates. Empty: PHP regions get no language features."
+        },
+        "cphp.phpServerArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "--stdio"
+          ],
+          "scope": "resource",
+          "description": "Arguments for the PHP language server."
         }
+      }
+    },
+    "breakpoints": [
+      {
+        "language": "cphp"
+      }
+    ],
+    "configurationDefaults": {
+      "[cphp]": {
+        "editor.formatOnSave": false,
+        "editor.formatOnPaste": false,
+        "editor.formatOnType": false
       }
     }
   },
   "scripts": {
     "test": "node test/run.js && node test/discovery-test.js",
     "stage": "node scripts/stage-server.js",
-    "package": "node scripts/stage-server.js && vsce package"
+    "build": "esbuild extension.js --bundle --platform=node --format=cjs --external:vscode --minify --outfile=out/extension.js",
+    "package": "node scripts/stage-server.js && npm run build && vsce package --no-dependencies"
   },
   "devDependencies": {
     "@vscode/vsce": "^4.0.0",
+    "esbuild": "^0.28.2",
     "vscode-oniguruma": "^2.0.1",
     "vscode-textmate": "^9.3.2"
   },
   "dependencies": {
     "vscode-languageclient": "^11.0.0"
   },
-  "main": "./extension.js",
+  "main": "./out/extension.js",
   "repository": {
     "type": "git",
     "url": "https://github.com/RichieKho/c.php"

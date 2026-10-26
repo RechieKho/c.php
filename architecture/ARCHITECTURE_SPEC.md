@@ -25,7 +25,7 @@ Use PHP as the preprocessor for C sources (`*.c.php`), expanded by a pre-compile
 | Shadow generator | `bin/cphp-shadow.php` | Template -> C shadow and PHP shadow |
 | LSP proxy | `editor/lsp-proxy/` | Routes LSP requests to clangd and a PHP language server |
 | VS Code extension | `editor/vscode/` | Thin client, TextMate grammar, problem matchers, `.vsix` packaging |
-| Tests | `tests/golden/`, `tests/example-project/` | Shared corpus; clean-checkout build test |
+| Tests | `tests/golden/`, `tests/run-golden.php`, `tests/example-project/` | Shared corpus (`<name>.expected`, `.shadow-c`, `.shadow-php`; `--update` regenerates); clean-checkout build test |
 
 ### Invariant
 
@@ -55,7 +55,7 @@ cphp_add_sources(<target> <template>...)   # expands templates, adds outputs to 
 
 ```cmake
 cphp_export_php(<target> DIRECTORY <dir> [NAME <lib>])   # share PHP files with consumers (section 4.1)
-cphp_export_headers(<target> [DIRECTORY <dir>])   # expose PHP-generated headers to consumers (section 5)
+cphp_export_headers(<target> [DESTINATION <dir>])   # expose PHP-generated headers to consumers (section 5)
 cphp_use_composer(<target> [JSON <composer.json>] [LOCK <composer.lock>] [ALLOW_SCRIPTS])   # Composer packages (section 4.3)
 ```
 
@@ -94,7 +94,7 @@ cphp_add_sources(app main.c.php)
 
 **Editor**
 
-- At generate time CMake writes `<binary-dir>/cphp/libs.json` (`file(GENERATE)`, one per directory that calls `cphp_add_sources`): `{"cphpVersion": ..., "libs": {NAME: path}}`. Tooling compares `cphpVersion` with its own. The proxy reads it to resolve `cphp('...')` for go-to-definition and to add the dirs to the PHP shadow's include paths for Intelephense/Phpactor.
+- At generate time CMake writes `<binary-dir>/cphp/libs.json` (`file(GENERATE)`, one per directory that calls `cphp_add_sources`): `{"cphpVersion": ..., "libs": {NAME: path}}`. Tooling compares `cphpVersion` with its own: the extension passes its version to the proxy (`--cphp-version`), which shows a one-time warning on mismatch. The proxy reads it to resolve `cphp('...')` for go-to-definition and to add the dirs to the PHP shadow's include paths for Intelephense/Phpactor.
 - Shadows treat `cphp('x/y.php')` as an ordinary PHP call. No new syntax.
 
 **Trust:** exported PHP runs at consumer build time, with the same trust as any fetched `CMakeLists.txt`.
@@ -118,14 +118,14 @@ cphp_add_sources(app main.c.php)
 ```
 
 - **Participants.** `cphp_use_composer(<t>)` registers `<t>`'s `composer.json` directory on the target as `CPHP_COMPOSER` (collected by walking the link closure like `CPHP_LIBS` in 4.1; the same `INTERFACE_*`/genex export limits apply, so carry install paths the same way). Each participant's `composer.json` must have a `name`.
-- **Merged root.** For each target that calls `cphp_add_sources`, CMake generates `<binary-dir>/cphp/composer/<hash>/composer.json` (hash of participants + lock path + `ALLOW_SCRIPTS`; targets with identical inputs share a root). Participants are **staged as copies** (`*.php` + `composer.json`, excluding `vendor/`, `.git/`, `node_modules/` and the build tree) under `<root>/participants/<name>/` and referenced as `path` repositories by **relative** URL (`symlink: false`), required as `<name>: @dev`, `minimum-stability: dev`, `prefer-stable: true`. The root's `extra.cphp.participants` holds a fingerprint of every participant's `composer.json`. Staging makes Composer's lock content-hash machine-independent (it covers `repositories`, so absolute paths would break committed locks) and gives the path packages a stable version regardless of the source tree's git state; the fingerprint is how a changed participant `composer.json` makes the lock stale (Composer only hashes the root). The participant's own `require`, `autoload` and `repositories` are resolved by Composer.
+- **Merged root.** For each target that calls `cphp_add_sources`, CMake generates `<binary-dir>/cphp/composer/<hash>/composer.json` (hash of participants + lock path + `ALLOW_SCRIPTS`; targets with identical inputs share a root). Participants are **staged as copies** (`*.php` + `composer.json` + everything its `autoload` `files`/`classmap`/`psr-4`/`psr-0` entries name, whatever the extension; excluding `vendor/`, `.git/`, `node_modules/` and the build tree) under `<root>/participants/<name>/` and referenced as `path` repositories by **relative** URL (`symlink: false`), required as `<name>: @dev`, `minimum-stability: dev`, `prefer-stable: true`. The root's `extra.cphp.participants` holds a fingerprint of every participant's `composer.json`. Staging makes Composer's lock content-hash machine-independent (it covers `repositories`, so absolute paths would break committed locks) and gives the path packages a stable version regardless of the source tree's git state; the fingerprint is how a changed participant `composer.json` makes the lock stale (Composer only hashes the root). The participant's own `require`, `autoload` and `repositories` are resolved by Composer.
 - **Lock.** Only the target's owning project has a lock: `LOCK`, default `<source-dir>/composer.lock`, committed. Libraries' own locks are ignored, as in Composer itself. A missing lock is a configure error unless `CPHP_COMPOSER_UPDATE=ON`, which runs `composer update` and rewrites the lock (the option is a cache variable: turn it off again afterwards). A stale lock is detected with `composer validate --check-lock` and is a configure error with the same remedy. Any change to a participant's `composer.json`, even cosmetic, makes the lock stale. The target that calls `cphp_add_sources` must itself call `cphp_use_composer` (it owns the lock).
 - **Install.** `composer install --no-interaction --no-dev --no-scripts --no-plugins` at configure time with the vendor dir in the build tree (`<root>/vendor`); skipped when the stamp (root json + lock + hashes of all participant files) matches, otherwise `vendor/` and `participants/` are wiped and rebuilt (Composer will not re-copy a locked path package). The lock, `composer.json` files and participant `*.php` files are `CMAKE_CONFIGURE_DEPENDS`, so editing one re-runs configure on the next build. The expansion command depends on `<root>/cphp-install.stamp`, so a reinstall re-expands.
 - **Composer itself.** `find_program(composer)` (`CPHP_COMPOSER_EXECUTABLE`). Missing -> configure error with install hint. Projects that never call `cphp_use_composer` never need it.
 - **Autoload.** The expander gets `--autoload <vendor>/autoload.php` and requires it before the template.
 - **Conflicts.** Reported by Composer's solver at configure time ("cannot be resolved", with the constraint chain). Fix by loosening a participant's constraint or pinning in the owning project's `composer.json`.
 - **Depfile.** Vendor files are filtered out of the depfile by the expander; the lock and `composer.json` files drive reinstall and re-expansion through CMake.
-- **Editor.** (planned) `libs.json` will list each target's vendor dir; the proxy adds it to the PHP shadow's include paths for Intelephense/Phpactor.
+- **Editor.** `libs.json` has a `vendors` array (each merged root's `vendor/` dir); at startup the proxy passes lib dirs and vendor dirs to the PHP server as extra workspace folders so it indexes them.
 - **Trust.** Scripts and plugins are off by default (`ALLOW_SCRIPTS` opts in). Packages still run arbitrary PHP at build time (section 7).
 
 ## 5. Editor tooling: shadow documents
@@ -137,14 +137,14 @@ For each template the proxy derives two virtual documents with **identical lengt
 | C shadow | PHP blocks -> spaces (newlines kept); `<?= $x ?>` -> same-width placeholder identifier | clangd |
 | PHP shadow | C text -> spaces, PHP kept | Intelephense / Phpactor |
 
-- Requests (completion, hover, definition, signature help, rename, semantic tokens) are routed by cursor region.
+- Position requests (completion, hover, definition, signature help, references, rename, highlight) are routed by cursor region: the PHP server receives the PHP shadow under the template's own URI (`--phpls`). Document symbols are requested from both servers and merged (sorted by line). `textDocument/semanticTokens/full` is requested from both servers and merged: the legend is clangd's plus any PHP types/modifiers it lacks, PHP token indices are remapped, tokens are sorted and delta re-encoded (shadows preserve layout, so positions need no mapping; `range` and `delta` are not advertised when the PHP server is on). Code actions currently come from clangd only. The extension runs one client (proxy + clangd) per workspace folder.
 - Diagnostics from both servers are merged.
 
 ### Layers
 
 1. **Live**: clangd on the C shadow, as you type.
 2. **On save / build**: real expansion, with `#line`-aware problem matchers and debugger support.
-3. **Declarations in real headers**: PHP-generated functions/structs/enums are emitted to a generated `.h`; shadows only need to understand function bodies. The header directory is `PRIVATE` by default; `cphp_export_headers(<target>)` explicitly exports it to consumers (`BUILD_INTERFACE` for in-tree, `INSTALL_INTERFACE` once installed).
+3. **Declarations in real headers**: PHP-generated functions/structs/enums are emitted to a generated `.h`; shadows only need to understand function bodies. A `foo.h.php` passed to `cphp_add_sources` expands to `<build>/cphp/foo.h` and the `cphp/` output root is added as a `PRIVATE` include directory of that target (include as `"foo.h"`, subdirectories preserved). `cphp_export_headers(<target> [DESTINATION <dir>])` makes it `PUBLIC` (`BUILD_INTERFACE`) with `INSTALL_INTERFACE <dir>` (default `include`) and installs the generated headers there. Debugging and formatting policy: `docs/DEBUGGING.md`, `docs/FORMATTING.md`.
 
 ## 6. Discovery
 

@@ -1,0 +1,6 @@
+#line 1 "@DIR@/crlf.c.php"
+int a;
+#line 3 "@DIR@/crlf.c.php"
+int b;
+#line 5 "@DIR@/crlf.c.php"
+int c = 3;

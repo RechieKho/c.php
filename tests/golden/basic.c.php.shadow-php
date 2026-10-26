@@ -1,0 +1,5 @@
+                  
+<?php $names = ['a', 'b']; ?>
+<?php foreach ($names as $n): ?>
+        <?= $n ?>                <?= ord($n) ?>   
+<?php endforeach; ?>

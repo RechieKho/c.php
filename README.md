@@ -30,7 +30,9 @@ int op_<?= $name ?>(int a, int b) { return a <?= $sym ?> b; }
 <?php endforeach ?>
 ```
 
-Compiler errors and debugger steps point at `table.c.php`, not the generated file.
+Compiler errors and debugger steps point at `table.c.php`, not the generated file (see [docs/DEBUGGING.md](docs/DEBUGGING.md)). Templates are not auto-formatted ([docs/FORMATTING.md](docs/FORMATTING.md)). Neovim, Helix and Zed setups (untested): [docs/EDITORS.md](docs/EDITORS.md).
+
+**Generated headers:** `cphp_add_sources(lib gen/limits.h.php)` expands to `<build>/cphp/gen/limits.h`, includable as `"gen/limits.h"` inside `lib`. `cphp_export_headers(lib)` also exposes it to targets that link `lib` and installs it under `include/`.
 
 **Requirements:** CMake >= 3.20, PHP >= 8.0 CLI, a C compiler. Editor tooling also needs clangd and a PHP language server (Intelephense or Phpactor).
 

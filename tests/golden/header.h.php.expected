@@ -1,0 +1,6 @@
+#line 1 "@DIR@/header.h.php"
+#pragma once
+#line 3 "@DIR@/header.h.php"
+int get_x(void);
+#line 3 "@DIR@/header.h.php"
+int get_y(void);

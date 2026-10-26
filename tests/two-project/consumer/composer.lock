@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "da5c81594b8d98d86043350f0acdba2b",
+    "content-hash": "ee1e659f73e051ce24d4e365c1bc4ec4",
     "packages": [
         {
             "name": "rechie/consumer",
@@ -26,13 +26,19 @@
             "dist": {
                 "type": "path",
                 "url": "participants/rechie/producer",
-                "reference": "3176218a5dc98c50d375c10506e118d9b86e7088"
+                "reference": "73204bc734d66151ec77c9ef122cdb819d7d6a0c"
             },
             "type": "library",
             "autoload": {
                 "psr-4": {
                     "Producer\\": "php-src/"
-                }
+                },
+                "classmap": [
+                    "legacy/"
+                ],
+                "files": [
+                    "legacy/helpers.inc"
+                ]
             },
             "transport-options": {
                 "symlink": false,

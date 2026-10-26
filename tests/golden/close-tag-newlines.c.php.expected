@@ -1,0 +1,11 @@
+#line 2 "@DIR@/close-tag-newlines.c.php"
+int a = 3;
+#line 4 "@DIR@/close-tag-newlines.c.php"
+int b;
+#line 6 "@DIR@/close-tag-newlines.c.php"
+
+int c; int d = 1; int e;
+int v_p;
+int v_q;
+#line 15 "@DIR@/close-tag-newlines.c.php"
+int f;
