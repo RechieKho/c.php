@@ -98,4 +98,9 @@ function localIntelephense(dir) {
   try { return fs.statSync(js).isFile() ? js : null; } catch (_) { return null; }
 }
 
-module.exports = { findBuildDirFor, findBuildDir, findServer, expand, onPath, localIntelephense };
+/** Does the build's compile_commands.json list c.php-generated sources (`.../cphp/<name>.c`)? */
+function hasGenerated(buildDir) {
+  try { return /"file"\s*:\s*"[^"]*[\\/]cphp[\\/]/.test(fs.readFileSync(path.join(buildDir, DB), 'utf8')); } catch (_) { return false; }
+}
+
+module.exports = { hasGenerated, findBuildDirFor, findBuildDir, findServer, expand, onPath, localIntelephense };

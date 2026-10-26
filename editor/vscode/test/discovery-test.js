@@ -2,7 +2,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const assert = require('assert');
-const { findBuildDir, findBuildDirFor, findServer, onPath, localIntelephense } = require('../discovery');
+const { hasGenerated, findBuildDir, findBuildDirFor, findServer, onPath, localIntelephense } = require('../discovery');
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cphp-disc-'));
 const mk = (rel, withDb = true) => {
@@ -62,5 +62,13 @@ check('localIntelephense needs the installed script', () => {
   fs.mkdirSync(path.dirname(js), { recursive: true });
   fs.writeFileSync(js, '');
   assert.strictEqual(localIntelephense(d), js);
+});
+check('hasGenerated spots cphp-generated sources', () => {
+  const w = mk('gen', false);
+  fs.writeFileSync(path.join(w, 'compile_commands.json'), JSON.stringify([{ directory: w, file: '/p/main.c' }]));
+  assert(!hasGenerated(w));
+  fs.writeFileSync(path.join(w, 'compile_commands.json'), JSON.stringify([{ directory: w, file: '/p/main.c' }, { directory: w, file: '/p/build/cphp/table.c' }]));
+  assert(hasGenerated(w));
+  assert(!hasGenerated(path.join(w, 'nope')));
 });
 process.exit(failed ? 1 : 0);

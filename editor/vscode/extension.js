@@ -2,7 +2,7 @@
 const vscode = require('vscode');
 const { LanguageClient, TransportKind } = require('vscode-languageclient/node');
 const { spawn } = require('child_process');
-const { findBuildDirFor, findServer, onPath, localIntelephense } = require('./discovery');
+const { hasGenerated, findBuildDirFor, findServer, onPath, localIntelephense } = require('./discovery');
 const { version } = require('./package.json');
 
 // One client (proxy + clangd) per workspace folder, so each folder gets its own build directory
@@ -57,6 +57,45 @@ function offerIntelephense(context) {
   });
 }
 
+const CPP_HINT = 'cphp.cppHintDismissed';
+// Two C/C++ language services both answer go-to-definition; VS Code shows both results, including
+// the other one's unremapped generated-file location. Offer to turn the other one off here.
+function hintOtherCpp(context, resource) {
+  if (context.globalState.get(CPP_HINT) || !vscode.extensions.getExtension('ms-vscode.cpptools')) return;
+  const cpp = vscode.workspace.getConfiguration('C_Cpp', resource);
+  if (cpp.get('intelliSenseEngine') === 'disabled') return;
+  context.globalState.update(CPP_HINT, true);   // ask once
+  vscode.window.showInformationMessage(
+    'c.php now answers go-to-definition for C files so results land on the .c.php template. The C/C++ extension answers too and points at generated files. Disable its IntelliSense for this workspace?',
+    'Disable for workspace', 'Keep both').then((c) => c === 'Disable for workspace' && disableCppIntelliSense(resource));
+}
+async function disableCppIntelliSense(resource) {
+  try {
+    await vscode.workspace.getConfiguration('C_Cpp', resource).update('intelliSenseEngine', 'disabled', vscode.ConfigurationTarget.Workspace);
+    vscode.window.showInformationMessage('c.php: C/C++ IntelliSense disabled for this workspace. Reload the window to apply.', 'Reload Window')
+      .then((c) => c && vscode.commands.executeCommand('workbench.action.reloadWindow'));
+  } catch (e) {
+    vscode.window.showWarningMessage(`c.php: could not change the setting (${e.message}). Set "C_Cpp.intelliSenseEngine": "disabled" yourself.`);
+  }
+}
+
+// Templates always start a client. Plain C/C++ files do too when their folder's build contains
+// generated sources, so go-to-definition from main.c works before any template is opened.
+function maybeStart(context, doc) {
+  if (doc.languageId === 'cphp') return start(context, doc);
+  if (doc.languageId !== 'c' && doc.languageId !== 'cpp') return;
+  if (doc.uri.scheme !== 'file') return;
+  const folder = folderOf(doc);
+  const folderUri = folder && folder.uri;
+  const cfg = vscode.workspace.getConfiguration('cphp', folderUri || doc.uri);
+  if (!cfg.get('serveCFiles', true) || clients.has(keyOf(folder))) return;
+  const buildDir = findBuildDirFor(doc.uri.fsPath, folderUri && folderUri.fsPath, {
+    buildDirectory: cfg.get('buildDirectory') || '',
+    cmakeBuildDirectory: vscode.workspace.getConfiguration('cmake', folderUri || doc.uri).get('buildDirectory') || '',
+  });
+  if (buildDir && hasGenerated(buildDir)) return start(context, doc);
+}
+
 async function start(context, doc) {
   const folder = folderOf(doc);
   const key = keyOf(folder);
@@ -80,6 +119,7 @@ async function start(context, doc) {
       'c.php: no compile_commands.json found. Configure the project with CMake (cphp_add_sources exports it) or set "cphp.buildDirectory". Using default clangd flags.',
       'Open Settings').then((c) => c && vscode.commands.executeCommand('workbench.action.openSettings', 'cphp.buildDirectory'));
   }
+  if (cfg.get('serveCFiles', true)) hintOtherCpp(context, folderUri || doc.uri);
   const php = resolvePhpServer(context, cfg);
   if (!php && cfg.get('phpServer') === 'intelephense') offerIntelephense(context);
   const args = [
@@ -92,11 +132,14 @@ async function start(context, doc) {
     ...(buildDir ? ['--compile-commands-dir=' + buildDir] : []),
     ...cfg.get('clangdArgs', []),
   ];
-  const scope = folderUri ? { scheme: 'file', language: 'cphp', pattern: new vscode.RelativePattern(folder, '**/*') } : { scheme: 'file', language: 'cphp' };
+  const within = (language) => (folderUri ? { scheme: 'file', language, pattern: new vscode.RelativePattern(folder, '**/*') } : { scheme: 'file', language });
+  // Plain C files too: the proxy remaps locations in generated files back to templates, which a
+  // separate C/C++ extension cannot do.
+  const selector = ['cphp', ...(cfg.get('serveCFiles', true) ? ['c', 'cpp'] : [])].map(within);
   const client = new LanguageClient('cphp', folder ? `c.php (${folder.name})` : 'c.php',
     { command: process.execPath, args, transport: TransportKind.stdio, options: { env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } } },
     {
-      documentSelector: [scope],
+      documentSelector: selector,
       workspaceFolder: folder,
       // Intelephense wants storage paths; other servers ignore unknown options.
       initializationOptions: { storagePath: context.storageUri && context.storageUri.fsPath, globalStoragePath: context.globalStorageUri.fsPath },
@@ -118,13 +161,17 @@ async function stopAll() {
 
 function activate(context) {
   context.subscriptions.push(
+    vscode.commands.registerCommand('cphp.disableCppIntelliSense', () => {
+      const ed = vscode.window.activeTextEditor;
+      return disableCppIntelliSense(ed ? ed.document.uri : (vscode.workspace.workspaceFolders || [])[0] && vscode.workspace.workspaceFolders[0].uri);
+    }),
     vscode.commands.registerCommand('cphp.restart', async () => {
       await stopAll();
       warned.clear();
       // Restart every folder that has an open template, not just the active one.
-      for (const d of vscode.workspace.textDocuments) if (d.languageId === 'cphp') await start(context, d);
+      for (const d of vscode.workspace.textDocuments) await maybeStart(context, d);
     }),
-    vscode.workspace.onDidOpenTextDocument((d) => { if (d.languageId === 'cphp') start(context, d); }),
+    vscode.workspace.onDidOpenTextDocument((d) => { maybeStart(context, d); }),
     // A removed folder's client would keep serving a stale build directory.
     vscode.workspace.onDidChangeWorkspaceFolders((e) => {
       for (const f of e.removed) {
@@ -134,7 +181,7 @@ function activate(context) {
       }
     }),
   );
-  for (const d of vscode.workspace.textDocuments) if (d.languageId === 'cphp') start(context, d);
+  for (const d of vscode.workspace.textDocuments) maybeStart(context, d);
 }
 
 module.exports = { activate, deactivate: stopAll };

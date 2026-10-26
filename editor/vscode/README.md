@@ -8,4 +8,6 @@ Contributes the `cphp` language (`*.c.php`, `*.h.php`), a TextMate grammar and p
 
 - **PHP features** (hover, completion, go-to-definition inside `<?php` regions): `cphp.phpServer` defaults to `intelephense`. If it is not on PATH the extension offers to install it with npm into its own storage (no global install; Intelephense is third-party, free tier). "Don't ask again" is remembered; set `cphp.phpServer` to another server (e.g. `phpactor` with `cphp.phpServerArgs` `["language-server"]`) or to an empty string to disable.
 
+- **Plain C files** (`cphp.serveCFiles`, default on): `main.c` etc. in a folder with templates go through the same proxy, so go-to-definition into generated code lands on the `.c.php` template. Run only one C/C++ language service per workspace: the extension offers to set `C_Cpp.intelliSenseEngine` to `disabled` for the workspace if C/C++ (`ms-vscode.cpptools`) is installed. The prompt shows once; run **c.php: Disable C/C++ IntelliSense for this workspace** later.
+
 See `../../architecture/ARCHITECTURE_SPEC.md`.

@@ -12,7 +12,8 @@
     "Programming Languages"
   ],
   "activationEvents": [
-    "onLanguage:cphp"
+    "onLanguage:cphp",
+    "workspaceContains:**/*.{c,h}.php"
   ],
   "contributes": {
     "languages": [
@@ -97,6 +98,10 @@
       {
         "command": "cphp.restart",
         "title": "c.php: Restart language server"
+      },
+      {
+        "command": "cphp.disableCppIntelliSense",
+        "title": "c.php: Disable C/C++ IntelliSense for this workspace"
       }
     ],
     "configuration": {
@@ -107,6 +112,12 @@
           "default": "",
           "scope": "resource",
           "description": "Directory with compile_commands.json. Empty: use cmake.buildDirectory, then search common build directories."
+        },
+        "cphp.serveCFiles": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "description": "Also serve plain C/C++ files (main.c, ...) in a folder that has c.php templates, so go-to-definition into a generated file lands on the .c.php template. Needs the other C/C++ language service (e.g. C/C++ IntelliSense) turned off for the workspace, or both answer."
         },
         "cphp.clangdPath": {
           "type": "string",
