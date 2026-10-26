@@ -6,7 +6,7 @@ Last updated: 2026-10-26 (Milestone 1c)
 
 ## Summary
 
-Pre-alpha. The expander (`bin/cphp.php`) and CMake function work end to end (verified on macOS/Ninja/PHP 8.5). Shadow generator, LSP proxy and VS Code extension are **not implemented**. Milestones 1a (core), 1b (shared PHP, `cphp_setup_vscode`) and 1c (Composer) are done; see `remaining_tasks/archive/2026-10-26-milestone-1{a,b,c}.md`. Editor scaffold (grammar, matchers) done. Shadow generator done. Next: the clangd **(verify)** spikes, then the LSP proxy.
+Pre-alpha. The expander (`bin/cphp.php`) and CMake function work end to end (verified on macOS/Ninja/PHP 8.5). Shadow generator, LSP proxy and VS Code extension are **not implemented**. Milestones 1a (core), 1b (shared PHP, `cphp_setup_vscode`) and 1c (Composer) are done; see `remaining_tasks/archive/2026-10-26-milestone-1{a,b,c}.md`. Editor scaffold (grammar, matchers) done. Shadow generator done. clangd spikes done (archived in `architecture/archive/2026-10-26-clangd-assumptions.md`). Next: the LSP proxy.
 
 ## Done
 
@@ -47,7 +47,7 @@ Pre-alpha. The expander (`bin/cphp.php`) and CMake function work end to end (ver
 - **One tokenizer**: expander and shadow generator must both use `PhpToken::tokenize`; do not fork parsing logic.
 - **Shadows preserve per-line UTF-16 width and newline bytes** (byte length may differ for non-ASCII); any width change breaks identity position mapping.
 - **clang-format is unsafe on the C shadow.**
-- **FetchContent + `CMAKE_EXPORT_COMPILE_COMMANDS`**: setting it from a subproject may not propagate (verify).
+- **compile_commands.json**: `cphp_add_sources` sets the target property `EXPORT_COMPILE_COMMANDS` (the variable does not propagate from subprojects); the user's other targets are untouched.
 - **npm project is `editor/vscode/` only**: `node_modules/`, lockfile and `.vsix` stay there; no root `package.json`.
 - **Security**: expanding a template runs arbitrary PHP; gate editor-triggered runs behind Workspace Trust.
 - License is MIT (`LICENSE`); the copyright holder line is "Richie Kho" — adjust if needed.

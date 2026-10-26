@@ -461,6 +461,13 @@ function(cphp_add_sources target)
   if(NOT TARGET ${target})
     message(FATAL_ERROR "cphp_add_sources: '${target}' is not a target.")
   endif()
+  # Editors read compile_commands.json for the generated siblings. The variable does
+  # not propagate from a FetchContent subproject, but the target property does.
+  # (an empty value means "unset"; an explicit OFF is respected)
+  get_property(_cphp_ecc TARGET ${target} PROPERTY EXPORT_COMPILE_COMMANDS)
+  if("${_cphp_ecc}" STREQUAL "")
+    set_property(TARGET ${target} PROPERTY EXPORT_COMPILE_COMMANDS ON)
+  endif()
 
   _cphp_check_expander_version()
 

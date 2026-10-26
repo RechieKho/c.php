@@ -193,9 +193,7 @@ Expansion executes arbitrary PHP. Treat templates as build scripts. Editor-trigg
 
 ## 9. Open assumptions (verify)
 
-- clangd accepts `didOpen`/`didChange` for a compile-DB path whose content is not on disk.
-- How clangd picks flags for a virtual/sibling URI.
-- clangd ignores `#line` for LSP positions.
-- `CMAKE_EXPORT_COMPILE_COMMANDS` behavior when set from a FetchContent subproject.
+Verified clangd behaviour is archived in [`archive/2026-10-26-clangd-assumptions.md`](archive/2026-10-26-clangd-assumptions.md). Design consequences: the proxy sends the C shadow to clangd under the generated sibling URI (exact compile-DB flags), maps URIs both ways, and treats positions as physical (`#line` ignored). `cphp_add_sources` sets the target property `EXPORT_COMPILE_COMMANDS`, because the variable does not propagate from a FetchContent subproject.
+
 - `DEPFILE` support across generators at the minimum CMake version (known: not honored by Visual Studio generators).
 - Windows: CRLF handling around `?>`, depfile drive-letter escaping per generator, clangd + `clang-cl` flag derivation for a sibling URI.

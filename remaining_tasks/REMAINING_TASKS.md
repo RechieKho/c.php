@@ -10,11 +10,8 @@ Done items archived in [`archive/2026-10-26-milestone-1a.md`](archive/2026-10-26
 
 Goal: de-risk assumptions before building anything large.
 
+- clangd spikes done: see `architecture/archive/2026-10-26-clangd-assumptions.md` (only Linux/Windows clangd runs remain unverified).
 - Grammar and problem matchers done: [`archive/2026-10-26-milestone-0-editor.md`](archive/2026-10-26-milestone-0-editor.md). Still to verify: matchers in a real VS Code task run (regex unit-tested only).
-- [ ] **(verify)** clangd accepts `didOpen`/`didChange` for a compile-DB path whose content is not on disk
-- [ ] **(verify)** how clangd picks flags for a virtual/sibling URI
-- [ ] **(verify)** clangd's handling of `#line` for LSP positions (assumed ignored)
-- [ ] **(verify)** `CMAKE_EXPORT_COMPILE_COMMANDS` behavior when set from a FetchContent subproject
 - [ ] **(verify)** `DEPFILE` support across generators on the minimum CMake version (VS generators known not to)
 - [ ] **(verify)** Windows: CRLF around `?>`, depfile drive-letter escaping, clangd + `clang-cl` flags for a sibling URI
 
@@ -45,7 +42,7 @@ Done and archived in [`archive/2026-10-26-milestone-1c.md`](archive/2026-10-26-m
 ## Milestone 2: LSP proxy, C side only
 
 - Shadow generator done: [`archive/2026-10-26-milestone-2a-shadow.md`](archive/2026-10-26-milestone-2a-shadow.md)
-- [ ] Stdio proxy forwarding to clangd (C shadow, identity position mapping); depends on the clangd **(verify)** items
+- [ ] Stdio proxy forwarding to clangd (C shadow, identity position mapping); open the shadow under the sibling URI (see spec section 9)
 - [ ] VS Code LSP client (~100 lines); package grammar + matchers (done) + client as `.vsix`
 - [ ] Proxy reads `<build>/cphp/libs.json` for `cphp('lib/file.php')` navigation and PHP include paths
 - [ ] Auto-discovery: `cmake.buildDirectory` / `_deps/cphp-src` / `compile_commands.json`, zero config
