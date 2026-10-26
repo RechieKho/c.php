@@ -176,6 +176,80 @@ function openTemplate(uri) {
   return sibUri;
 }
 
+// ---- generated file -> template ----
+// clangd answers definition/references with locations in the generated `foo.c` (for files the
+// client has not opened as templates). The expander's `foo.c.map` ([generated line, template line]
+// pairs, 1-based) turns those back into template locations.
+const genMaps = new Map();   // generated path -> { mtime, map } (map null: no map file)
+function genMapOf(file) {
+  let m;
+  try { m = fs.statSync(file + '.map').mtimeMs; } catch (_) { return null; }
+  let e = genMaps.get(file);
+  if (!e || e.mtime !== m) {
+    try { e = { mtime: m, map: JSON.parse(fs.readFileSync(file + '.map', 'utf8')) }; } catch (_) { e = { mtime: m, map: null }; }
+    genMaps.set(file, e);
+  }
+  return e.map && Array.isArray(e.map.lines) && e.map.template ? e.map : null;
+}
+const readLines = (f) => { try { return splitLines(fs.readFileSync(f, 'utf8')); } catch (_) { return null; } };
+// Template position for a generated one. Columns survive up to the first divergence between the
+// two lines (an expanded `<?= ?>` starts there); a range end that falls inside the expansion goes
+// to the end of that echo tag.
+function genToTemplate(map, gen, tpl, pos, isEnd) {
+  const g = pos.line;
+  let hit = null;
+  for (const [gl, tl] of map.lines) if (gl - 1 <= g) hit = [gl - 1, tl - 1]; else break;
+  const tl = Math.max(0, Math.min(hit ? hit[1] + (g - hit[0]) : g, tpl.length - 1));
+  const gt = gen[g] || '', tt = tpl[tl] || '';
+  let pre = 0;
+  while (pre < gt.length && pre < tt.length && gt[pre] === tt[pre]) pre++;
+  let suf = 0;
+  while (suf < gt.length - pre && suf < tt.length - pre && gt[gt.length - 1 - suf] === tt[tt.length - 1 - suf]) suf++;
+  let ch;
+  if (pos.character <= pre) ch = pos.character;
+  else if (gt.length - pos.character <= suf) ch = tt.length - (gt.length - pos.character);
+  else if (isEnd) { const i = tt.indexOf('?>', pre); ch = i >= 0 ? i + 2 : pre; }
+  else ch = pre;
+  return { line: tl, character: Math.max(0, Math.min(ch, tt.length)) };
+}
+function locToTemplate(uri, range) {
+  if (toClient.has(norm(uri))) return null;   // opened template: shadow positions are already template positions
+  let file;
+  try { file = fileURLToPath(uri); } catch (_) { return null; }
+  const map = genMapOf(file);
+  if (!map || !fs.existsSync(map.template)) return null;
+  const tplUri = pathToFileURL(map.template).href;
+  const gen = readLines(file), tpl = docText.has(tplUri) ? splitLines(docText.get(tplUri)) : readLines(map.template);
+  if (!gen || !tpl) return null;
+  const start = genToTemplate(map, gen, tpl, range.start, false);
+  let end = genToTemplate(map, gen, tpl, range.end, true);
+  if (end.line < start.line || (end.line === start.line && end.character < start.character)) end = start;
+  return { uri: tplUri, range: { start, end } };
+}
+function remapLocations(v) {
+  if (Array.isArray(v)) {
+    const seen = new Set();
+    return v.map(remapLocations).filter((x) => {
+      if (!x || typeof x !== 'object' || !x.uri || !x.range) return true;
+      const k = x.uri + JSON.stringify(x.range);
+      return seen.has(k) ? false : (seen.add(k), true);
+    });
+  }
+  if (!v || typeof v !== 'object') return v;
+  if (typeof v.uri === 'string' && v.range && v.range.start) {
+    const t = locToTemplate(v.uri, v.range);
+    if (t) return Object.assign({}, v, t);
+  }
+  if (typeof v.targetUri === 'string' && v.targetRange) {
+    const r = locToTemplate(v.targetUri, v.targetRange);
+    const sel = r && locToTemplate(v.targetUri, v.targetSelectionRange || v.targetRange);
+    if (r && sel) return Object.assign({}, v, { targetUri: r.uri, targetRange: r.range, targetSelectionRange: sel.range });
+  }
+  const o = {};
+  for (const k of Object.keys(v)) o[k] = remapLocations(v[k]);
+  return o;
+}
+
 // ---- LSP framing ----
 function reader(stream, onMsg) {
   let buf = Buffer.alloc(0);
@@ -226,6 +300,8 @@ const docMask = new Map();   // template uri -> { c: lines, php: lines } shadows
 const diags = new Map();     // template uri -> { c: [], php: [] }
 const symPending = new Map();   // client request id -> { c, php, timer } while merging documentSymbol replies
 const SYM = 'cphp-sym:';
+const docShadow = new Map();  // template uri -> C shadow lines, to drop clangd tokens on placeholders
+const hoverPending = new Map(); // client request id -> { uri, pos } for clangd hover requests
 const tokPending = new Map();   // client request id -> { c, php, timer } while merging semanticTokens/full replies
 const TOK = 'cphp-tok:';
 let tokLegend = null;           // { legend, remap }: merged legend and PHP index remap, set when the PHP server offers tokens
@@ -292,14 +368,42 @@ function encodeTokens(toks) {
   }
   return data;
 }
+// A placeholder (`+`, `_`) stands in for a `<?= ?>` echo in the C shadow; clangd's semantic tokens on
+// it would colour template characters that are not C, so drop tokens whose shadow text differs.
+function dropPlaceholderTokens(uri, toks) {
+  const sh = docShadow.get(uri), tpl = splitLines(docText.get(uri) || '');
+  if (!sh) return toks;
+  return toks.filter(([l, c, len]) => l >= tpl.length || (tpl[l] || '').substr(c, len) === (sh[l] || '').substr(c, len));
+}
+// clangd names an echo-built identifier after its placeholder (`op_______`); show the template
+// spelling (`op_<?= $name ?>`) in hover text instead. Shadows keep widths, so columns line up.
+function templateHover(result, uri, pos) {
+  const sh = (docShadow.get(uri) || [])[pos.line], tpl = splitLines(docText.get(uri) || '')[pos.line];
+  if (!result || !result.contents || sh === undefined || tpl === undefined) return result;
+  const isId = (ch) => /\w/.test(sh[ch] || '');
+  let at = pos.character;
+  if (!isId(at) && isId(at - 1)) at--;
+  if (!isId(at)) return result;
+  let s = at, e = at + 1;
+  while (s > 0 && isId(s - 1)) s--;
+  while (isId(e)) e++;
+  const word = sh.slice(s, e), orig = tpl.slice(s, e);
+  if (word === orig) return result;
+  const fix = (t) => t.split(word).join(orig);
+  const c = result.contents;
+  const contents = typeof c === 'string' ? fix(c)
+    : Array.isArray(c) ? c.map((x) => (typeof x === 'string' ? fix(x) : Object.assign({}, x, { value: fix(x.value) })))
+      : Object.assign({}, c, { value: fix(c.value) });
+  return Object.assign({}, result, { contents });
+}
 function replyTokens(id) {
   const e = tokPending.get(id);
   if (!e || e.c === undefined || e.php === undefined) return;
   clearTimeout(e.timer);
   tokPending.delete(id);
   const cd = e.c.result && e.c.result.data, pd = e.php && e.php.data;
-  if (!tokLegend || (!cd && !pd)) { write(process.stdout, e.c.result ? e.c : Object.assign({}, e.c, { result: e.php || null })); return; }
-  const toks = decodeTokens(cd || []).concat(decodeTokens(pd || [], tokLegend.remap));
+  if (!cd && !pd) { write(process.stdout, e.c.result ? e.c : Object.assign({}, e.c, { result: e.php || null })); return; }
+  const toks = dropPlaceholderTokens(e.uri, decodeTokens(cd || [])).concat(tokLegend ? decodeTokens(pd || [], tokLegend.remap) : []);
   write(process.stdout, Object.assign({}, e.c, { error: undefined, result: { data: encodeTokens(toks) } }));
 }
 const splitLines = (t) => t.split(/\r\n|\r|\n/);
@@ -309,6 +413,7 @@ const POSITIONAL = new Set(['hover', 'completion', 'definition', 'declaration', 
 function syncDoc(tplUri, td, text) {
   const cSh = shadowOf(text, tplUri, 'c');
   const out = { c: cSh };
+  docShadow.set(tplUri, splitLines(cSh));
   if (phpOn()) {
     const pSh = shadowOf(text, tplUri, 'php');
     docMask.set(tplUri, { c: splitLines(cSh), php: splitLines(pSh) });
@@ -364,18 +469,22 @@ function fromClient(msg) {
       symPending.set(msg.id, e);
       write(phpls.stdin, { jsonrpc: '2.0', id: SYM + msg.id, method: msg.method, params: { textDocument: { uri: tplUri } } });
     }
-    if (phpOn() && tokLegend && msg.id !== undefined && kind === 'semanticTokens/full') {
-      const e = { c: undefined, php: undefined, timer: null };
-      e.timer = setTimeout(() => { if (e.php === undefined) e.php = null; replyTokens(msg.id); }, 5000);
+    if (msg.id !== undefined && kind === 'semanticTokens/full') {
+      const e = { c: undefined, php: null, timer: null, uri: tplUri };
+      if (phpOn() && tokLegend) {
+        e.php = undefined;
+        e.timer = setTimeout(() => { if (e.php === undefined) e.php = null; replyTokens(msg.id); }, 5000);
+        write(phpls.stdin, { jsonrpc: '2.0', id: TOK + msg.id, method: msg.method, params: { textDocument: { uri: tplUri } } });
+      }
       tokPending.set(msg.id, e);
-      write(phpls.stdin, { jsonrpc: '2.0', id: TOK + msg.id, method: msg.method, params: { textDocument: { uri: tplUri } } });
     }
+    if (msg.id !== undefined && kind === 'hover' && msg.params.position) hoverPending.set(msg.id, { uri: tplUri, pos: msg.params.position });
     if (phpOn() && msg.id !== undefined && POSITIONAL.has(kind) && msg.params.position
         && regionAt(tplUri, msg.params.position) === 'php') {
       return write(phpls.stdin, msg);   // template URI is the PHP server's URI too
     }
     if (msg.method === 'textDocument/didClose') {
-      docText.delete(tplUri); docMask.delete(tplUri); diags.delete(tplUri);
+      docText.delete(tplUri); docMask.delete(tplUri); docShadow.delete(tplUri); diags.delete(tplUri);
       if (phpOn()) write(phpls.stdin, { jsonrpc: '2.0', method: msg.method, params: { textDocument: { uri: tplUri } } });
     }
     if (msg.method === 'textDocument/didOpen') {
@@ -430,12 +539,21 @@ function finishInit(phpResult) {
   } else if (opts.phpls) {
     log('PHP language server did not initialize; PHP features disabled');
   }
+  if (!tokLegend && c.semanticTokensProvider && c.semanticTokensProvider.legend) {
+    // tokens are filtered here, so only full requests (no delta/range) are offered
+    c.semanticTokensProvider = { legend: c.semanticTokensProvider.legend, full: true, range: false };
+  }
   c.textDocumentSync = { openClose: true, change: 1, save: { includeText: false } };
   for (const k of DROP) delete c[k];   // formatting is unsafe on the shadow
   write(process.stdout, msg);
 }
 
 function fromServer(msg) {
+  if (msg.id !== undefined && hoverPending.has(msg.id) && msg.method === undefined) {
+    const h = hoverPending.get(msg.id);
+    hoverPending.delete(msg.id);
+    if (msg.result) msg = Object.assign({}, msg, { result: templateHover(msg.result, h.uri, h.pos) });
+  }
   if (msg.id !== undefined && tokPending.has(msg.id) && msg.method === undefined) {
     tokPending.get(msg.id).c = deepMap(msg, toClient);
     return replyTokens(msg.id);
@@ -461,6 +579,7 @@ function fromServer(msg) {
       return publishMerged(uri);
     }
   }
+  if (msg.id !== undefined && msg.method === undefined && msg.result) msg = Object.assign({}, msg, { result: remapLocations(msg.result) });
   write(process.stdout, deepMap(msg, toClient));
 }
 

@@ -61,6 +61,28 @@ const check = async (name, fn) => { try { await fn(); console.log('ok   ' + name
     const h = await req('textDocument/hover', { textDocument: { uri: tplUri }, position: { line: 4, character: 5 } });
     assert(h.result && JSON.stringify(h.result).includes('int'));
   });
+  await check('semantic tokens skip <?= ?> echo placeholders', async () => {
+    const caps = init.result.capabilities.semanticTokensProvider;
+    assert(caps && caps.full && !caps.range);
+    const r = await req('textDocument/semanticTokens/full', { textDocument: { uri: tplUri } });
+    const line = bad.split('\n')[4], spans = [];
+    for (const m of line.matchAll(/<\?=.*?\?>/g)) spans.push([m.index, m.index + m[0].length]);
+    assert.strictEqual(spans.length, 2);
+    let l = 0, c = 0, n = 0;
+    for (let i = 0; i < r.result.data.length; i += 5) {
+      const d = r.result.data.slice(i, i + 5);
+      l += d[0]; c = d[0] ? d[1] : c + d[1];
+      if (l === 4) { n++; assert(!spans.some(([s, e]) => c < e && c + d[2] > s), `token at column ${c} covers an echo`); }
+    }
+    assert(n > 0, 'expected tokens on the C parts of the line');
+  });
+  await check('hover on an echo-built name shows the template spelling', async () => {
+    const col = bad.split('\n')[4].indexOf('op_') + 1;
+    const h = await req('textDocument/hover', { textDocument: { uri: tplUri }, position: { line: 4, character: col } });
+    const text = JSON.stringify(h.result);
+    assert(text.includes('op_<?= $name ?>'), text);
+    assert(!/_{4}/.test(text), text);
+  });
   await check('definition of a header symbol maps back to a real file', async () => {
     const d = await req('textDocument/definition', { textDocument: { uri: tplUri }, position: { line: 4, character: 5 } });
     assert(d.result && d.result.length >= 1 && d.result[0].uri.startsWith('file:'));
@@ -80,6 +102,28 @@ const check = async (name, fn) => { try { await fn(); console.log('ok   ' + name
     assert(!none.result || !none.result.some((l) => l.uri.endsWith('macros.php')));
     note('textDocument/didClose', { textDocument: { uri: u } });
     fs.rmSync(libDir, { recursive: true, force: true });
+  });
+  await check('definition into a generated file maps back to the template', async () => {
+    const main = path.join(root, 'tests/example-project/main.c');
+    const mu = pathToFileURL(main).href;
+    const text = fs.readFileSync(main, 'utf8');
+    note('textDocument/didOpen', { textDocument: { uri: mu, languageId: 'c', version: 1, text } });
+    const col = text.split('\n')[3].indexOf('op_sub') + 1;
+    let hits;
+    // clangd may still be indexing the generated file; retry until it is found
+    for (let i = 0; i < 75; i++) {
+      const d = await req('textDocument/definition', { textDocument: { uri: mu }, position: { line: 3, character: col } });
+      hits = [].concat(d.result || []);
+      if (hits.some((l) => l.uri === tplUri)) break;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    assert(hits.every((l) => !/cphp\/table\.c$/.test(l.uri)), JSON.stringify(hits));
+    if (!hits.some((l) => l.uri === tplUri) && hits.every((l) => l.uri.endsWith('table.h'))) { console.log('     (clangd had not indexed the generated definition; not checked)'); return; }
+    const t = hits.find((l) => l.uri === tplUri);
+    assert(t, JSON.stringify(hits));
+    assert.strictEqual(t.range.start.line, 4);
+    assert.strictEqual(t.range.start.character, src.split('\n')[4].indexOf('op_'));
+    note('textDocument/didClose', { textDocument: { uri: mu } });
   });
   diags.length = 0;
   note('textDocument/didChange', { textDocument: { uri: tplUri, version: 2 }, contentChanges: [{ text: src }] });
