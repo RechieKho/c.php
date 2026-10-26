@@ -42,8 +42,8 @@ Done and archived in [`archive/2026-10-26-milestone-1c.md`](archive/2026-10-26-m
 ## Milestone 2: LSP proxy, C side only
 
 - Shadow generator done: [`archive/2026-10-26-milestone-2a-shadow.md`](archive/2026-10-26-milestone-2a-shadow.md)
-- [ ] Stdio proxy forwarding to clangd (C shadow, identity position mapping); open the shadow under the sibling URI (see spec section 9)
-- [ ] VS Code LSP client (~100 lines); package grammar + matchers (done) + client as `.vsix`
+- C-side proxy done: [`archive/2026-10-26-milestone-2b-proxy.md`](archive/2026-10-26-milestone-2b-proxy.md). Still open: read `libs.json` (see below), proxy tests on Linux/Windows, `.h.php` sibling lookup (headers are not compiled, so they use the virtual URI)
+- VS Code client, discovery and `.vsix` packaging done: [`archive/2026-10-26-milestone-2c-vscode-client.md`](archive/2026-10-26-milestone-2c-vscode-client.md). Still open: **run it in a real VS Code** (only unit/e2e-tested headless), multi-root workspaces (one client for the first folder), bundle with esbuild to shrink the vsix
 - [ ] Proxy reads `<build>/cphp/libs.json` for `cphp('lib/file.php')` navigation and PHP include paths
 - [ ] Auto-discovery: `cmake.buildDirectory` / `_deps/cphp-src` / `compile_commands.json`, zero config
 

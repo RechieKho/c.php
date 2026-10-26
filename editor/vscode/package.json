@@ -6,7 +6,7 @@
   "publisher": "rechiekho",
   "license": "MIT",
   "engines": {
-    "vscode": "^1.80.0"
+    "vscode": "^1.91.0"
   },
   "categories": [
     "Programming Languages"
@@ -22,9 +22,9 @@
           "C.PHP",
           "cphp"
         ],
-        "extensions": [
-          ".c.php",
-          ".h.php"
+        "filenamePatterns": [
+          "*.c.php",
+          "*.h.php"
         ],
         "configuration": "./language-configuration.json"
       }
@@ -92,13 +92,69 @@
           "line": 4
         }
       }
-    ]
+    ],
+    "commands": [
+      {
+        "command": "cphp.restart",
+        "title": "c.php: Restart language server"
+      }
+    ],
+    "configuration": {
+      "title": "c.php",
+      "properties": {
+        "cphp.buildDirectory": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "Directory with compile_commands.json. Empty: use cmake.buildDirectory, then search common build directories."
+        },
+        "cphp.clangdPath": {
+          "type": "string",
+          "default": "clangd",
+          "scope": "machine-overridable",
+          "description": "clangd executable."
+        },
+        "cphp.phpPath": {
+          "type": "string",
+          "default": "php",
+          "scope": "machine-overridable",
+          "description": "PHP CLI (>= 8.0) used to compute shadows."
+        },
+        "cphp.clangdArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "scope": "resource",
+          "description": "Extra clangd arguments."
+        }
+      }
+    }
   },
   "scripts": {
-    "test": "node test/run.js"
+    "test": "node test/run.js && node test/discovery-test.js",
+    "stage": "node scripts/stage-server.js",
+    "package": "node scripts/stage-server.js && vsce package"
   },
   "devDependencies": {
+    "@vscode/vsce": "^4.0.0",
     "vscode-oniguruma": "^2.0.1",
     "vscode-textmate": "^9.3.2"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^11.0.0"
+  },
+  "main": "./extension.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/RichieKho/c.php"
+  },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "c.php runs clangd and php from the workspace configuration."
+    },
+    "virtualWorkspaces": false
   }
 }

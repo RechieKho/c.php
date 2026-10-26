@@ -12,6 +12,12 @@ function check(name, fn) {
   try { fn(); console.log('ok   ' + name); } catch (e) { failures++; console.log('FAIL ' + name + '\n     ' + e.message); }
 }
 
+// ---- language registration ----
+check('language uses filenamePatterns (built-in php owns the .php extension)', () => {
+  const l = pkg.contributes.languages.find((x) => x.id === 'cphp');
+  assert(l.filenamePatterns.includes('*.c.php') && !(l.extensions || []).length);
+});
+
 // ---- problem matchers ----
 const matcher = (n) => new RegExp(pkg.contributes.problemMatchers.find((m) => m.name === n).pattern.regexp);
 check('cphp-gcc matches #line-mapped error', () => {
@@ -93,6 +99,14 @@ if (!Object.values(files).every(fs.existsSync)) {
     const l = tokenize('<?php // note ?> int x;')[0];
     const t = l.find((x) => x.text === 'int');
     assert(t && !t.scopes.includes('meta.embedded.block.php') && t.scopes.some((s) => s.startsWith('storage.type')));
+  });
+  check('PHP blocks are recognised inside C braces/parens (regression)', () => {
+    const l = tokenize('int f(int a) { return a <?= $s ?> b;\n<?php endif ?>\n}');
+    assert(l[0].some((t) => t.text === 's' && t.scopes.includes('meta.embedded.block.php')), 'echo in block');
+    assert(l[1].some((t) => t.text === 'endif' && t.scopes.includes('meta.embedded.block.php')), 'next line php');
+    assert(!l[0].some((t) => t.text.includes('$s') && !t.scopes.includes('meta.embedded.block.php')));
+    const q = tokenize('char *s = "x<?= $a ?>y";')[0];
+    assert(q.some((t) => t.text === 'a' && t.scopes.includes('meta.embedded.block.php')), 'echo inside C string');
   });
   check('bare <? is not PHP (short_open_tag off)', () => {
     const l = tokenize('a <? b')[0];

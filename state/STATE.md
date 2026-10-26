@@ -6,7 +6,7 @@ Last updated: 2026-10-26 (Milestone 1c)
 
 ## Summary
 
-Pre-alpha. The expander (`bin/cphp.php`) and CMake function work end to end (verified on macOS/Ninja/PHP 8.5). Shadow generator, LSP proxy and VS Code extension are **not implemented**. Milestones 1a (core), 1b (shared PHP, `cphp_setup_vscode`) and 1c (Composer) are done; see `remaining_tasks/archive/2026-10-26-milestone-1{a,b,c}.md`. Editor scaffold (grammar, matchers) done. Shadow generator done. clangd spikes done (archived in `architecture/archive/2026-10-26-clangd-assumptions.md`). Next: the LSP proxy.
+Pre-alpha. The expander (`bin/cphp.php`) and CMake function work end to end (verified on macOS/Ninja/PHP 8.5). Shadow generator, LSP proxy and VS Code extension are **not implemented**. Milestones 1a (core), 1b (shared PHP, `cphp_setup_vscode`) and 1c (Composer) are done; see `remaining_tasks/archive/2026-10-26-milestone-1{a,b,c}.md`. Editor scaffold (grammar, matchers) done. Shadow generator done. clangd spikes done (archived in `architecture/archive/2026-10-26-clangd-assumptions.md`). LSP proxy and VS Code client done and packagable, but never run inside real VS Code. Next: manual smoke test in VS Code, then Milestone 3 (PHP side).
 
 ## Done
 
@@ -18,6 +18,8 @@ Pre-alpha. The expander (`bin/cphp.php`) and CMake function work end to end (ver
 - [x] `cphp_use_composer` (merged root, staged participants, locked install); tested with Composer 2.10
 - [x] VS Code extension scaffold: `cphp` language, TextMate grammar, `cphp-gcc`/`cphp-msvc`/`cphp-php` matchers; `npm test` in `editor/vscode/` (see `remaining_tasks/archive/2026-10-26-milestone-0-editor.md`)
 - [x] Shadow generator `bin/cphp-shadow.php` + `tests/shadow-test.php` (ctest `cphp_shadow`)
+- [x] C-side LSP proxy `editor/lsp-proxy/cphp-lsp-proxy.js` + e2e test with real clangd
+- [x] VS Code client + discovery + `.vsix` packaging (`npm run package` in `editor/vscode/`); not yet exercised inside a real VS Code
 - [x] `cphp_export_php`, `cphp()`, `--lib`, `libs.json`; two-project test (FetchContent and installed); `cphp_setup_vscode`
 
 ## TODO (current focus: finish Milestone 0 spike, then 1b)
@@ -25,6 +27,13 @@ Pre-alpha. The expander (`bin/cphp.php`) and CMake function work end to end (ver
 - [ ] Resolve all **(verify)** items (see `remaining_tasks/REMAINING_TASKS.md`)
 
 ## Gotchas
+
+- **Echo placeholder heuristic** (`cphp_shadow_is_operator`): binary-operator position -> `+`, otherwise `_` identifier. `return <?= $sym ?> b` (unary operator) is still a false C error in the live view.
+
+- **`editor/vscode/server/` is generated** by `npm run stage` (copies proxy + `bin/cphp-shadow.php`); never edit it. Without it the extension falls back to the repo layout (`../lsp-proxy`, `../../bin`), which is how F5 development works.
+- The client launches the proxy with `process.execPath` + `ELECTRON_RUN_AS_NODE=1` (no system Node needed); `php` and `clangd` must be on PATH or set in settings.
+
+- **Proxy sync is serial and blocking**: each didOpen/didChange spawns `php cphp-shadow.php` synchronously (tens of ms). Move to a long-lived PHP worker if typing latency matters. The e2e test (`editor/lsp-proxy/test/proxy-test.js`) is not in ctest.
 
 - **Matchers are `$cphp-*`**, not `$gcc`/`$msCompile` (built-ins can't be redefined). Grammar tests need VS Code's built-in grammars installed or `CPHP_VSCODE_EXTENSIONS`; they skip otherwise.
 

@@ -3,22 +3,49 @@
   "name": "C.PHP",
   "scopeName": "source.cphp",
   "patterns": [
-    { "include": "#php-block" },
-    { "include": "source.c" }
+    {
+      "include": "#php-block"
+    },
+    {
+      "include": "source.c"
+    }
   ],
   "repository": {
     "php-block": {
       "begin": "<\\?(?:(php)\\b|(=))",
       "beginCaptures": {
-        "0": { "name": "punctuation.section.embedded.begin.php" },
-        "1": { "name": "keyword.other.php" },
-        "2": { "name": "keyword.other.php" }
+        "0": {
+          "name": "punctuation.section.embedded.begin.php"
+        },
+        "1": {
+          "name": "keyword.other.php"
+        },
+        "2": {
+          "name": "keyword.other.php"
+        }
       },
       "end": "\\?>",
-      "endCaptures": { "0": { "name": "punctuation.section.embedded.end.php" } },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.embedded.end.php"
+        }
+      },
       "name": "meta.embedded.block.php",
       "contentName": "source.php",
-      "patterns": [{ "include": "source.php" }]
+      "patterns": [
+        {
+          "include": "source.php"
+        }
+      ]
+    }
+  },
+  "injections": {
+    "L:source.cphp - meta.embedded.block.php": {
+      "patterns": [
+        {
+          "include": "#php-block"
+        }
+      ]
     }
   }
 }

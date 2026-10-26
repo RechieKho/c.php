@@ -176,7 +176,7 @@ Expansion executes arbitrary PHP. Treat templates as build scripts. Editor-trigg
 
 ## 8. Known limitations (by design)
 
-- PHP-built names (`<?= $name ?>_init()`) are placeholders in the live view; real diagnostics arrive after expansion.
+- PHP-built names (`<?= $name ?>_init()`) are placeholders in the live view; real diagnostics arrive after expansion. An echo between two operands (`a <?= $op ?> b`) gets a `+` placeholder instead of an identifier (heuristic: operand-end after whitespace on the left, operand-start on the right, left word not a keyword). A unary position (`return <?= $op ?> b`) cannot be told from a value and still shows a false error.
 - C inside loops/conditionals is analyzed once, not per iteration.
 - C braces must be balanced within each PHP branch.
 - clang-format is unsafe on the shadow; formatting disabled or limited to PHP-free regions.

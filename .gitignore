@@ -5,3 +5,4 @@ build/
 editor/vscode/node_modules/
 editor/vscode/out/
 editor/vscode/*.vsix
+editor/vscode/server/
