@@ -82,4 +82,20 @@ function findServer(extDir) {
   return null;
 }
 
-module.exports = { findBuildDirFor, findBuildDir, findServer, expand };
+/** Is `cmd` an executable on PATH? */
+function onPath(cmd, env = process.env, platform = process.platform) {
+  const exts = platform === 'win32' ? ['', ...(env.PATHEXT || '.EXE;.CMD;.BAT').split(';')] : [''];
+  for (const d of (env.PATH || env.Path || '').split(path.delimiter)) {
+    if (!d) continue;
+    for (const x of exts) { try { if (fs.statSync(path.join(d, cmd + x)).isFile()) return true; } catch (_) { /* next */ } }
+  }
+  return false;
+}
+
+/** Intelephense installed by the extension into `dir` (npm --prefix): run with node, which also works on Windows. */
+function localIntelephense(dir) {
+  const js = path.join(dir, 'node_modules', 'intelephense', 'lib', 'intelephense.js');
+  try { return fs.statSync(js).isFile() ? js : null; } catch (_) { return null; }
+}
+
+module.exports = { findBuildDirFor, findBuildDir, findServer, expand, onPath, localIntelephense };

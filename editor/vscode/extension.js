@@ -1,7 +1,8 @@
 'use strict';
 const vscode = require('vscode');
 const { LanguageClient, TransportKind } = require('vscode-languageclient/node');
-const { findBuildDirFor, findServer } = require('./discovery');
+const { spawn } = require('child_process');
+const { findBuildDirFor, findServer, onPath, localIntelephense } = require('./discovery');
 const { version } = require('./package.json');
 
 // One client (proxy + clangd) per workspace folder, so each folder gets its own build directory
@@ -12,6 +13,49 @@ const log = vscode.window.createOutputChannel('c.php');
 
 const folderOf = (doc) => vscode.workspace.getWorkspaceFolder(doc.uri);
 const keyOf = (folder) => (folder ? folder.uri.toString() : '');
+
+const DISMISSED = 'cphp.intelephensePromptDismissed';
+let installing = false;
+
+// PHP server command for the proxy: the configured one, or for the default `intelephense` the
+// PATH copy, else the copy this extension installed into its own storage (run with node, so
+// Windows needs no .cmd shim). null: nothing usable.
+function resolvePhpServer(context, cfg) {
+  const name = cfg.get('phpServer');
+  const extra = cfg.get('phpServerArgs', ['--stdio']);
+  if (!name) return null;
+  if (name !== 'intelephense' || onPath(name)) return { cmd: name, args: extra };
+  const js = localIntelephense(context.globalStorageUri.fsPath);
+  return js ? { cmd: process.execPath, args: [js, ...extra] } : null;
+}
+
+function offerIntelephense(context) {
+  if (installing || context.globalState.get(DISMISSED)) return;
+  installing = true;
+  vscode.window.showInformationMessage(
+    'c.php: PHP hover, completion and go-to-definition need a PHP language server. Install Intelephense (free tier, third-party, via npm) into the extension\'s own storage?',
+    'Install', 'Not now', "Don't ask again").then(async (choice) => {
+    if (choice === "Don't ask again") await context.globalState.update(DISMISSED, true);
+    if (choice !== 'Install') { installing = false; return; }
+    const dir = context.globalStorageUri.fsPath;
+    try {
+      await require('fs').promises.mkdir(dir, { recursive: true });
+      await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'c.php: installing Intelephense' }, () => new Promise((resolve, reject) => {
+        const p = spawn('npm', ['install', 'intelephense', '--prefix', dir, '--no-audit', '--no-fund'], { shell: process.platform === 'win32' });
+        let err = '';
+        p.stderr.on('data', (d) => { err += d; });
+        p.on('error', reject);
+        p.on('exit', (c) => (c === 0 ? resolve() : reject(new Error(err.trim().split('\n').pop() || `npm exited with ${c}`))));
+      }));
+      if (!localIntelephense(dir)) throw new Error('intelephense.js not found after install');
+      vscode.window.showInformationMessage('c.php: Intelephense installed; restarting.');
+      await vscode.commands.executeCommand('cphp.restart');
+    } catch (e) {
+      log.appendLine('Intelephense install failed: ' + e.message);
+      vscode.window.showWarningMessage(`c.php: could not install Intelephense (${e.code === 'ENOENT' ? 'npm not found' : e.message}). Run "npm i -g intelephense" yourself.`);
+    } finally { installing = false; }
+  });
+}
 
 async function start(context, doc) {
   const folder = folderOf(doc);
@@ -36,13 +80,15 @@ async function start(context, doc) {
       'c.php: no compile_commands.json found. Configure the project with CMake (cphp_add_sources exports it) or set "cphp.buildDirectory". Using default clangd flags.',
       'Open Settings').then((c) => c && vscode.commands.executeCommand('workbench.action.openSettings', 'cphp.buildDirectory'));
   }
+  const php = resolvePhpServer(context, cfg);
+  if (!php && cfg.get('phpServer') === 'intelephense') offerIntelephense(context);
   const args = [
     server.proxy,
     '--clangd', cfg.get('clangdPath') || 'clangd',
     '--php', cfg.get('phpPath') || 'php',
     '--shadow', server.shadow,
     '--cphp-version', version,
-    ...(cfg.get('phpServer') ? ['--phpls', cfg.get('phpServer'), ...cfg.get('phpServerArgs', ['--stdio']).flatMap((a) => ['--phpls-arg', a])] : []),
+    ...(php ? ['--phpls', php.cmd, ...php.args.flatMap((a) => ['--phpls-arg', a])] : []),
     ...(buildDir ? ['--compile-commands-dir=' + buildDir] : []),
     ...cfg.get('clangdArgs', []),
   ];

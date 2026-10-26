@@ -2,7 +2,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const assert = require('assert');
-const { findBuildDir, findBuildDirFor, findServer } = require('../discovery');
+const { findBuildDir, findBuildDirFor, findServer, onPath, localIntelephense } = require('../discovery');
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cphp-disc-'));
 const mk = (rel, withDb = true) => {
@@ -42,4 +42,25 @@ check('server found in repo layout', () => {
 });
 
 fs.rmSync(tmp, { recursive: true, force: true });
+
+check('onPath finds an executable in PATH only', () => {
+  const d = mk('bin', false);
+  fs.writeFileSync(path.join(d, 'fake-ls'), '');
+  assert(onPath('fake-ls', { PATH: ['/nonexistent', d].join(path.delimiter) }, 'linux'));
+  assert(!onPath('other-ls', { PATH: d }, 'linux'));
+  assert(!onPath('fake-ls', {}, 'linux'));
+});
+check('onPath honours PATHEXT on Windows', () => {
+  const d = mk('winbin', false);
+  fs.writeFileSync(path.join(d, 'fake-ls.CMD'), '');
+  assert(onPath('fake-ls', { PATH: d, PATHEXT: '.EXE;.CMD' }, 'win32'));
+});
+check('localIntelephense needs the installed script', () => {
+  const d = mk('store', false);
+  assert.strictEqual(localIntelephense(d), null);
+  const js = path.join(d, 'node_modules', 'intelephense', 'lib', 'intelephense.js');
+  fs.mkdirSync(path.dirname(js), { recursive: true });
+  fs.writeFileSync(js, '');
+  assert.strictEqual(localIntelephense(d), js);
+});
 process.exit(failed ? 1 : 0);

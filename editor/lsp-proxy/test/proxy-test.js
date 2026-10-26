@@ -5,7 +5,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const assert = require('assert');
-const { pathToFileURL } = require('url');
+const { pathToFileURL, fileURLToPath } = require('url');
 
 const root = path.resolve(__dirname, '../../..');
 for (const t of ['cmake', 'clangd', 'php']) {
@@ -51,6 +51,7 @@ const check = async (name, fn) => { try { await fn(); console.log('ok   ' + name
     const c = init.result.capabilities;
     assert.strictEqual(c.textDocumentSync.change, 1);
     assert(!c.documentFormattingProvider && !c.documentRangeFormattingProvider);
+    assert(!c.executeCommandProvider, 'command ids would collide between clients');
   });
   note('textDocument/didOpen', { textDocument: { uri: tplUri, languageId: 'cphp', version: 1, text: bad } });
   await check('diagnostic comes back on the template URI at template line', async () => {
@@ -82,6 +83,15 @@ const check = async (name, fn) => { try { await fn(); console.log('ok   ' + name
     const text = JSON.stringify(h.result);
     assert(text.includes('op_<?= $name ?>'), text);
     assert(!/_{4}/.test(text), text);
+  });
+  await check('definition on an echo-built name lists the generated names', async () => {
+    const col = bad.split('\n')[4].indexOf('op_') + 1;
+    const d = await req('textDocument/definition', { textDocument: { uri: tplUri }, position: { line: 4, character: col } });
+    const hits = [].concat(d.result || []);
+    assert.strictEqual(hits.length, 3, JSON.stringify(hits));
+    assert(hits.every((l) => /cphp[\\/]table\.c$/.test(l.uri) && l.range.start.line < l.range.end.line + 1));
+    const gen = fs.readFileSync(fileURLToPath(hits[0].uri), 'utf8').split('\n');
+    assert.deepStrictEqual(hits.map((l) => gen[l.range.start.line].slice(l.range.start.character, l.range.end.character)), ['op_add', 'op_sub', 'op_mul']);
   });
   await check('definition of a header symbol maps back to a real file', async () => {
     const d = await req('textDocument/definition', { textDocument: { uri: tplUri }, position: { line: 4, character: 5 } });
@@ -132,6 +142,12 @@ const check = async (name, fn) => { try { await fn(); console.log('ok   ' + name
     assert(!d.diagnostics.some((e) => /zz/.test(e.message)));
   });
   note('textDocument/didClose', { textDocument: { uri: tplUri } });
+  await check('requests after didClose get a null result, not a clangd error', async () => {
+    for (const m of ['documentSymbol', 'foldingRange', 'semanticTokens/full', 'codeAction', 'hover']) {
+      const r = await req('textDocument/' + m, { textDocument: { uri: tplUri }, position: { line: 4, character: 5 }, range: { start: { line: 0, character: 0 }, end: { line: 1, character: 0 } }, context: { diagnostics: [] } });
+      assert(!r.error && r.result === null, `${m}: ${JSON.stringify(r)}`);
+    }
+  });
   await req('shutdown', null);
   note('exit', null);
   fs.rmSync(build, { recursive: true, force: true });

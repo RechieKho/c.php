@@ -212,6 +212,33 @@ function genToTemplate(map, gen, tpl, pos, isEnd) {
   else ch = pre;
   return { line: tl, character: Math.max(0, Math.min(ch, tt.length)) };
 }
+// Template -> generated: a name built with `<?= ?>` (`op_<?= $n ?>`) does not exist in the template
+// and clangd only sees a placeholder, so definition there lists the names the expander produced.
+function echoNameDefinitions(tplPath, text, pos) {
+  const line = splitLines(text)[pos.line];
+  if (line === undefined) return null;
+  const re = /(?:\w|<\?=.*?\?>)+/g;
+  let m;
+  while ((m = re.exec(line))) {
+    if (pos.character < m.index || pos.character > m.index + m[0].length) continue;
+    if (!/<\?=/.test(m[0]) || !/\w/.test(m[0].replace(/<\?=.*?\?>/g, ''))) return null;
+    break;
+  }
+  if (!m) return null;
+  const gp = siblingFor(tplPath);
+  const map = gp && genMapOf(gp);
+  const gen = map && readLines(gp);
+  if (!gen) return null;
+  const genUri = pathToFileURL(gp).href, out = [];
+  map.lines.forEach(([gl, tl], i) => {
+    const next = i + 1 < map.lines.length ? map.lines[i + 1][0] : gen.length + 1;
+    const g = gl - 1 + (pos.line - (tl - 1));   // generated line of this run that maps to the template line
+    if (pos.line < tl - 1 || g >= next - 1 || g >= gen.length) return;
+    const w = /^\w+/.exec(gen[g].slice(m.index));
+    if (w) out.push({ uri: genUri, range: { start: { line: g, character: m.index }, end: { line: g, character: m.index + w[0].length } } });
+  });
+  return out.length ? out : null;
+}
 function locToTemplate(uri, range) {
   if (toClient.has(norm(uri))) return null;   // opened template: shadow positions are already template positions
   let file;
@@ -288,7 +315,10 @@ let phplsResult;        // undefined until that reply arrives (null: failed)
 if (opts.phpls) {
   phpls = spawn(opts.phpls, opts.phplsArgs, { stdio: ['pipe', 'pipe', 'inherit'] });
   const gone = () => { phpls = null; phplsReady = false; if (phplsResult === undefined) { phplsResult = null; finishInit(null); } };
-  phpls.on('error', (e) => { log('cannot start PHP language server: ' + e.message); gone(); });
+  phpls.on('error', (e) => { log('cannot start PHP language server: ' + e.message);
+    write(process.stdout, { jsonrpc: '2.0', method: 'window/showMessage', params: { type: 2,
+      message: `c.php: PHP language server '${opts.phpls}' could not be started (${e.code || e.message}), so PHP regions have no hover, completion or definition. Install it (npm i -g intelephense) or set cphp.phpServer.` } });
+    gone(); });
   phpls.on('exit', gone);
   phpls.stdin.on('error', () => {});
 }
@@ -457,10 +487,17 @@ function fromClient(msg) {
   const td = msg.params && msg.params.textDocument;
   if (td && typeof td.uri === 'string' && isTemplate(td.uri)) {
     const tplUri = td.uri;
+    // The client may still have requests in flight when it closes a document; clangd would answer
+    // them with a "non-added document" error that the client logs as a failed request.
+    if (msg.id !== undefined && msg.method && !docText.has(tplUri)) {
+      return write(process.stdout, { jsonrpc: '2.0', id: msg.id, result: null });
+    }
     const sibUri = openTemplate(tplUri);
     if (msg.method === 'textDocument/definition' && msg.id !== undefined) {
       const loc = cphpDefinition(docText.get(tplUri) || '', msg.params.position);
       if (loc) return write(process.stdout, { jsonrpc: '2.0', id: msg.id, result: [loc] });
+      const echoed = echoNameDefinitions(fileURLToPath(tplUri), docText.get(tplUri) || '', msg.params.position);
+      if (echoed) return write(process.stdout, { jsonrpc: '2.0', id: msg.id, result: echoed });
     }
     const kind = msg.method && msg.method.slice('textDocument/'.length);
     if (phpOn() && msg.id !== undefined && kind === 'documentSymbol') {
@@ -507,7 +544,9 @@ function fromClient(msg) {
   write(clangd.stdin, deepMap(msg, toServer));
 }
 
-const DROP = ['documentFormattingProvider', 'documentRangeFormattingProvider', 'documentOnTypeFormattingProvider'];
+// executeCommandProvider: the client registers clangd's command ids (clangd.applyFix, ...) globally,
+// so a second client (another workspace folder) or another clangd extension fails to initialize.
+const DROP = ['documentFormattingProvider', 'documentRangeFormattingProvider', 'documentOnTypeFormattingProvider', 'executeCommandProvider'];
 let clangdInit = null;
 function finishInit(phpResult) {
   if (!clangdInit) return;
@@ -544,7 +583,7 @@ function finishInit(phpResult) {
     c.semanticTokensProvider = { legend: c.semanticTokensProvider.legend, full: true, range: false };
   }
   c.textDocumentSync = { openClose: true, change: 1, save: { includeText: false } };
-  for (const k of DROP) delete c[k];   // formatting is unsafe on the shadow
+  for (const k of DROP) delete c[k];   // formatting is unsafe on the shadow; commands would collide across clients
   write(process.stdout, msg);
 }
 

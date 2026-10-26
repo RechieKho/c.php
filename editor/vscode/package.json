@@ -131,9 +131,9 @@
         },
         "cphp.phpServer": {
           "type": "string",
-          "default": "",
+          "default": "intelephense",
           "scope": "machine-overridable",
-          "description": "PHP language server executable (e.g. intelephense or phpactor language-server) for the PHP parts of templates. Empty: PHP regions get no language features."
+          "description": "PHP language server executable for the PHP parts of templates (install with `npm i -g intelephense`; for Phpactor set `phpactor` and args `language-server`). If it is not found, PHP regions get no language features. Empty: disabled."
         },
         "cphp.phpServerArgs": {
           "type": "array",
