@@ -13,13 +13,13 @@ Goal: de-risk assumptions before building anything large.
 - clangd spikes done: see `architecture/archive/2026-10-26-clangd-assumptions.md` (only Linux/Windows clangd runs remain unverified).
 - Grammar and problem matchers done: [`archive/2026-10-26-milestone-0-editor.md`](archive/2026-10-26-milestone-0-editor.md). Still to verify: matchers in a real VS Code task run (regex unit-tested only).
 - `DEPFILE` verified for Ninja and Unix Makefiles (CMake 4.4.2, macOS), see [`archive/2026-10-26-milestone-4.md`](archive/2026-10-26-milestone-4.md). Still to verify: CMake 3.20 itself, Xcode generator
-- [ ] **(verify)** Windows: CRLF around `?>`, depfile drive-letter escaping, clangd + `clang-cl` flags for a sibling URI
+- Windows CI (MSVC/Ninja, PHP 8.2) green as of 2026-10-26: shadow, golden, proxy (real clangd), stub proxy, example and two-project tests pass; see [`archive/2026-10-26-ci-windows.md`](archive/2026-10-26-ci-windows.md). Still open: explicit CRLF-bytes and depfile drive-letter checks (not isolated by a test), `clang-cl` flags for a sibling URI
 
 ## Milestone 1a: Core build and Windows groundwork
 
 Goal: a correct, platform-safe expander and CMake function. Everything else builds on this.
 
-- [ ] Windows/MSVC: **verify** on a real Windows run (CI job exists in `.github/workflows/ci.yml`, not yet run); `$msCompile` matcher ships with the VS Code extension; CRLF-safe shadows (expander done)
+- [ ] Windows/MSVC: CI job runs and passes (see above); `$msCompile` matcher ships with the VS Code extension but is only regex unit-tested
 - [ ] Opt-in static php-cli download (**verify** sourcing); the clear missing-PHP error is done
 
 ## Milestone 1b: Sharing PHP and editor setup
@@ -28,7 +28,7 @@ Done and archived in [`archive/2026-10-26-milestone-1b.md`](archive/2026-10-26-m
 
 - [ ] Verify `cphp_setup_vscode` against real `code`/`codium` CLIs (tested with a fake CLI only); confirm Marketplace/Open VSX ID once the extension is published (**decision pending**: publisher `rechiekho`)
 - [ ] Editor-side half of the version check: the proxy/extension compares `libs.json` `cphpVersion` (Milestone 2)
-- [ ] Windows run of the two-project test (CI step added, not yet run)
+- Windows run of the two-project test: passes in CI (2026-10-26)
 
 ## Milestone 1c: Composer
 
@@ -54,7 +54,7 @@ Done and archived in [`archive/2026-10-26-milestone-1c.md`](archive/2026-10-26-m
 ## Cross-cutting
 
 - Golden corpus + `tests/run-golden.php` done (Milestone 4). Gotcha-derived cases added (`close-tag-newlines`, `magic-constants`; see [`archive/2026-10-26-golden-gotchas.md`](archive/2026-10-26-golden-gotchas.md)). Ongoing: add a golden case with each bug fix; a CRLF-bytes check on Windows checkouts (`.gitattributes` now marks them `-text`)
-- [ ] Windows items above need a real CI run (CI jobs exist, never executed)
+- Linux, macOS and Windows CI jobs all green (2026-10-26). Composer paths on Windows are not isolated by a CI test
 
 ## Later
 
