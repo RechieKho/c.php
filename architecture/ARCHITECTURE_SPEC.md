@@ -187,7 +187,7 @@ Expansion executes arbitrary PHP. Treat templates as build scripts. Editor-trigg
 - **Line endings.** The expander and shadows handle `\r\n`: newline counts are preserved per physical line, and a `\r\n` after `?>` is swallowed as one unit. Shadows keep the original newline bytes so offsets stay identical. LSP columns are UTF-16 code units on all platforms.
 - **Generators.** Ninja and Makefile generators use `DEPFILE`. Visual Studio generators ignore it: PHP includes are not tracked, so only listed `DEPENDS` trigger re-expansion. `cphp_add_sources` warns once and recommends Ninja. `CMAKE_GENERATOR` is otherwise not constrained.
 - **Commands.** `add_custom_command` uses `VERBATIM`; PHP is invoked as `php.exe` found by `find_program`. Editor CLIs on Windows are `code.cmd`/`cursor.cmd`; Composer is `composer.bat`/`composer.phar` run via php.
-- **Diagnostics.** The MSVC problem matcher (`$msCompile`) is shipped alongside `$gcc`; `/FC` is recommended so paths are absolute. PDB stepping follows `#line` as on other platforms.
+- **Diagnostics.** The MSVC problem matcher (`$cphp-msvc`) is shipped alongside `$cphp-gcc` (VS Code's built-in `$gcc`/`$msCompile` cannot be redefined); `/FC` is recommended so paths are absolute. PDB stepping follows `#line` as on other platforms.
 - **LSP.** URIs are `file:///c%3A/...`; the proxy normalizes drive letters and case before mapping a template to its generated sibling. clangd with `clang-cl` compile commands is the supported path for MSVC-flavoured flags.
 - **Symlinks.** Not relied on (Composer path repos use `symlink: false`).
 

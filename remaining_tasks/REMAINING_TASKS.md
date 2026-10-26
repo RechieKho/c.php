@@ -10,8 +10,7 @@ Done items archived in [`archive/2026-10-26-milestone-1a.md`](archive/2026-10-26
 
 Goal: de-risk assumptions before building anything large.
 
-- [ ] TextMate grammar for `*.c.php` (embed `source.php` in `<?php ?>`, `source.c` elsewhere) in `editor/vscode/`
-- [ ] `$gcc` problem matcher: errors click through to the template
+- Grammar and problem matchers done: [`archive/2026-10-26-milestone-0-editor.md`](archive/2026-10-26-milestone-0-editor.md). Still to verify: matchers in a real VS Code task run (regex unit-tested only).
 - [ ] **(verify)** clangd accepts `didOpen`/`didChange` for a compile-DB path whose content is not on disk
 - [ ] **(verify)** how clangd picks flags for a virtual/sibling URI
 - [ ] **(verify)** clangd's handling of `#line` for LSP positions (assumed ignored)
@@ -45,8 +44,9 @@ Done and archived in [`archive/2026-10-26-milestone-1c.md`](archive/2026-10-26-m
 
 ## Milestone 2: LSP proxy, C side only
 
-- [ ] Shadow generator (`bin/cphp-shadow.php`) + stdio proxy forwarding to clangd
-- [ ] VS Code client (~100 lines) + grammar + problem matcher packaged as `.vsix`
+- Shadow generator done: [`archive/2026-10-26-milestone-2a-shadow.md`](archive/2026-10-26-milestone-2a-shadow.md)
+- [ ] Stdio proxy forwarding to clangd (C shadow, identity position mapping); depends on the clangd **(verify)** items
+- [ ] VS Code LSP client (~100 lines); package grammar + matchers (done) + client as `.vsix`
 - [ ] Proxy reads `<build>/cphp/libs.json` for `cphp('lib/file.php')` navigation and PHP include paths
 - [ ] Auto-discovery: `cmake.buildDirectory` / `_deps/cphp-src` / `compile_commands.json`, zero config
 

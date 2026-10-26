@@ -1,0 +1,104 @@
+{
+  "name": "cphp",
+  "displayName": "c.php",
+  "description": "Syntax highlighting and problem matchers for C templates with embedded PHP (*.c.php)",
+  "version": "0.1.0",
+  "publisher": "rechiekho",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:cphp"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "cphp",
+        "aliases": [
+          "C.PHP",
+          "cphp"
+        ],
+        "extensions": [
+          ".c.php",
+          ".h.php"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "cphp",
+        "scopeName": "source.cphp",
+        "path": "./syntaxes/cphp.tmLanguage.json",
+        "embeddedLanguages": {
+          "meta.embedded.block.php": "php",
+          "source.c": "c"
+        }
+      }
+    ],
+    "problemMatchers": [
+      {
+        "name": "cphp-gcc",
+        "owner": "cphp",
+        "source": "cphp",
+        "fileLocation": [
+          "autoDetect",
+          "${workspaceFolder}"
+        ],
+        "pattern": {
+          "regexp": "^(.+?):(\\d+):(?:(\\d+):)?\\s+(warning|error|fatal error|note):\\s+(.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        }
+      },
+      {
+        "name": "cphp-msvc",
+        "owner": "cphp",
+        "source": "cphp",
+        "fileLocation": [
+          "autoDetect",
+          "${workspaceFolder}"
+        ],
+        "pattern": {
+          "regexp": "^(.+?)\\((\\d+)(?:,(\\d+))?\\)\\s*:\\s+(warning|error|fatal error)\\s+(\\w+\\d+)\\s*:\\s+(.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "code": 5,
+          "message": 6
+        }
+      },
+      {
+        "name": "cphp-php",
+        "owner": "cphp",
+        "source": "cphp",
+        "fileLocation": [
+          "autoDetect",
+          "${workspaceFolder}"
+        ],
+        "pattern": {
+          "regexp": "^(?:PHP )?(Warning|Fatal error|Parse error|Notice|Deprecated|Error):\\s+(.*?) in (.+?) on line (\\d+)$",
+          "severity": 1,
+          "message": 2,
+          "file": 3,
+          "line": 4
+        }
+      }
+    ]
+  },
+  "scripts": {
+    "test": "node test/run.js"
+  },
+  "devDependencies": {
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.3.2"
+  }
+}
