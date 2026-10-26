@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 220" width="400" height="220" role="img" aria-label="C.php logo">
+  <ellipse cx="200" cy="110" rx="190" ry="100" fill="#777bb4"/>
+  <g fill="none" stroke="#000" stroke-width="16" stroke-linecap="round" stroke-linejoin="round">
+    <!-- C -->
+    <path d="M119 77 A34 34 0 1 0 119 125"/>
+    <!-- p -->
+    <path d="M185 98 V175 M185 98 h14 a21 21 0 0 1 0 42 h-14"/>
+    <!-- h -->
+    <path d="M245 55 V140 M245 118 a21 21 0 0 1 42 0 V140"/>
+    <!-- p -->
+    <path d="M312 98 V175 M312 98 h14 a21 21 0 0 1 0 42 h-14"/>
+  </g>
+  <circle cx="150" cy="134" r="9" fill="#000"/>
+</svg>
