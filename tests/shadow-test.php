@@ -48,12 +48,23 @@ foreach ($cases as $name => $src) {
 
 $c = cphp_shadow("a<?= \$x ?>b\nint <?= \$n ?>_f();", 'c');
 expect(preg_match('/^a_+b\nint _+_f\(\);$/', $c) === 1, 'echo becomes identifier');
-$c = cphp_shadow("x <?= foo(\n  1) ?> y", 'c');
-expect(preg_match('/^x _+\s+ y$/', $c) === 1 && !preg_match('/_.*\n.*_/s', $c), 'multi-line echo: identifier on first line only');
+$c = cphp_shadow("x = <?= foo(\n  1) ?> y", 'c');
+expect(preg_match('/^x = _+\s+ y$/', $c) === 1 && !preg_match('/_.*\n.*_/s', $c), 'multi-line echo: identifier on first line only');
 $c = cphp_shadow("a <?php if (1): ?>\nint b;\n<?php endif ?>\n", 'c');
 expect(trim($c) === "a\nint b;" || preg_match('/^a\s*\nint b;\n\s*\n$/', $c) === 1, 'statement blocks vanish');
 $p = cphp_shadow("int a;\n<?php \$k = 1; ?>\n", 'php');
 expect(str_contains($p, '<?php $k = 1; ?>') && !str_contains($p, 'int'), 'PHP shadow keeps PHP, blanks C');
+foreach ([
+    ['return a <?= $o ?> b;', '/^return a \+\s+ b;$/', 'operator between operands'],
+    ['int <?= $n ?>(void);', '/^int _+\(void\);$/', 'declarator name after type keyword'],
+    ['x = <?= $v ?>;', '/^x = _+;$/', 'operand after ='],
+    ['f(a, <?= $v ?>);', '/^f\(a, _+\);$/', 'argument'],
+    ["return <?= \$v ?> b;", '/^return _+ b;$/', 'after return'],
+    ['op_<?= $n ?>(1)', '/^op_+\(1\)$/', 'glued identifier part'],
+    ["a <?= \$o ?>\n  b", '/^a \+\s+\n  b$/', 'operator with newline after'],
+] as [$in, $re, $label]) {
+    expect(preg_match($re, cphp_shadow($in, 'c')) === 1, "echo context: $label");
+}
 $c = cphp_shadow("a <? b", 'c');
 expect($c === "a <? b", 'bare <? left as C');
 
