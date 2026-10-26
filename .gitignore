@@ -1,4 +1,7 @@
 build/
 .DS_Store
-node_modules/
-*.vsix
+
+# npm project lives in editor/vscode only
+editor/vscode/node_modules/
+editor/vscode/out/
+editor/vscode/*.vsix

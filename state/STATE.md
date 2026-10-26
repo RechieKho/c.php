@@ -32,5 +32,6 @@ Pre-alpha, design stage. Repo scaffolding exists (CMake project skeleton, direct
 - **clang-format is unsafe on the C shadow.**
 - **`cphp_add_sources` currently fails with a clear error** until `bin/cphp.php` exists.
 - **FetchContent + `CMAKE_EXPORT_COMPILE_COMMANDS`**: setting it from a subproject may not propagate (verify).
+- **npm project is `editor/vscode/` only**: `node_modules/`, lockfile and `.vsix` stay there; no root `package.json`.
 - **Security**: expanding a template runs arbitrary PHP; gate editor-triggered runs behind Workspace Trust.
 - License is MIT (`LICENSE`); the copyright holder line is "Richie Kho" — adjust if needed.

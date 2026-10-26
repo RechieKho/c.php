@@ -1,5 +1,7 @@
 # Architecture Specification
 
+> **Dreaming:** keep this file under 500 lines. After each completed implementation, move inactive info (superseded design, resolved assumptions) to `archive/<date>-<topic>.md` and link it here. See `/CLAUDE.md`.
+
 Status: design stage. Items marked **(verify)** are unconfirmed assumptions tracked in [`../remaining_tasks/REMAINING_TASKS.md`](../remaining_tasks/REMAINING_TASKS.md).
 
 ## 1. Purpose

@@ -11,8 +11,8 @@ Write C with embedded PHP in `*.c.php` files. A CMake step expands them before t
 ```cmake
 include(FetchContent)
 FetchContent_Declare(cphp
-  GIT_REPOSITORY https://github.com/RechieKho/cphp
-  GIT_TAG        v0.1.0)
+  GIT_REPOSITORY https://github.com/RechieKho/c.php
+  GIT_TAG        main)  # pin to a release tag once one exists
 FetchContent_MakeAvailable(cphp)
 
 add_executable(app main.c)
