@@ -26,7 +26,8 @@ Pre-alpha, design stage. Repo scaffolding exists (CMake project skeleton, direct
 
 - **PHP swallows the newline after `?>`**: the expander must compensate or line numbers drift.
 - **`short_open_tag` must be off** (`-d short_open_tag=0`), otherwise `<?` in C is parsed as PHP.
-- **Output path is a contract**: `<build>/cphp/<relpath-without-.php>`; editor tooling depends on it.
+- **Output path is a contract**: `${CMAKE_CURRENT_BINARY_DIR}/cphp/<relpath-without-.php>`; editor tooling depends on it. `cmake/CPhp.cmake` still uses the old top-level path (to fix).
+- **Windows is designed in** (spec 8.1): always emit forward-slash paths in `#line`, depfiles, maps; handle CRLF.
 - **One tokenizer**: expander and shadow generator must both use `PhpToken::tokenize`; do not fork parsing logic.
 - **Shadows must preserve length and line/column layout**; any width change breaks identity position mapping.
 - **clang-format is unsafe on the C shadow.**
