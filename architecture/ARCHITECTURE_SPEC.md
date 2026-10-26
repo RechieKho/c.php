@@ -2,7 +2,7 @@
 
 > **Dreaming:** keep this file under 500 lines. After each completed implementation, move inactive info (superseded design, resolved assumptions) to `archive/<date>-<topic>.md` and link it here. See `/CLAUDE.md`.
 
-Status: design stage. Items marked **(verify)** are unconfirmed assumptions tracked in [`../remaining_tasks/REMAINING_TASKS.md`](../remaining_tasks/REMAINING_TASKS.md).
+Status: expander and CMake function implemented; editor tooling is design only. Items marked **(verify)** are unconfirmed assumptions tracked in [`../remaining_tasks/REMAINING_TASKS.md`](../remaining_tasks/REMAINING_TASKS.md).
 
 ## 1. Purpose
 
@@ -41,7 +41,8 @@ foo.c.php --(php cphp.php)--> <build>/cphp/foo.c --(cpp)--> --(cc)--> foo.o
 ```
 
 - `add_custom_command(... DEPFILE ...)`; integrates with Ninja/Make and appears in `compile_commands.json`. Visual Studio generators ignore `DEPFILE`; see section 8.1.
-- The expander emits `#line N "foo.c.php"` so compiler errors and debugger steps point at the template.
+- The expander emits `#line N "foo.c.php"` (absolute, forward-slash path) at line starts where output drifts from the template, and records each in `foo.c.map` (JSON: `lines: [[generated_line, template_line], ...]`). PHP errors print as `file:line: error: msg` with the template line.
+- Implementation: the template is tokenized with `PhpToken::tokenize` into a PHP program with identical line layout; literal text goes through `cphp_emit()`; the program runs via `eval`.
 - PHP runs with `-d short_open_tag=0` so a stray `<?` in C is not treated as PHP.
 - Newline counts are preserved (PHP swallows the newline after `?>`), keeping PHP errors on the correct line.
 - Output path is deterministic: `${CMAKE_CURRENT_BINARY_DIR}/cphp/<relpath-without-.php>`, with `<relpath>` relative to `CMAKE_CURRENT_SOURCE_DIR`. It is scoped to the calling directory, not the top-level build, so two projects that both have `src/util.c.php` cannot collide. Editor tooling relies on this to find compile flags.
@@ -58,6 +59,8 @@ cphp_export_headers(<target> [DIRECTORY <dir>])   # expose PHP-generated headers
 cphp_use_composer(<target> [JSON <composer.json>] [LOCK <composer.lock>] [ALLOW_SCRIPTS])   # Composer packages (section 4.3)
 ```
 
+Version check: `bin/cphp.php --version` must equal the module's `CPHP_VERSION`, else configure fails.
+
 Requirements: CMake >= 3.20, PHP >= 8.0 CLI, a C compiler.
 
 ### 4.1 Sharing PHP across projects
@@ -71,7 +74,7 @@ add_library(mylib ...)                         # or add_library(mylib INTERFACE)
 cphp_export_php(mylib DIRECTORY php NAME mylib)
 ```
 
-- `cphp_export_php` records `<dir>` on the target as the interface property `INTERFACE_CPHP_LIBS`, holding a `NAME=path` entry, with `$<BUILD_INTERFACE:abs>` for in-tree use and `$<INSTALL_INTERFACE:share/cphp/NAME>` for installed use.
+- `cphp_export_php` records `NAME=<real path>` in the plain target property `CPHP_LIBS` (in-tree use), and appends a `$<0:cphp:NAME=$<BUILD_INTERFACE:abs>$<INSTALL_INTERFACE:$<INSTALL_PREFIX>/share/cphp/NAME>>` entry to `INTERFACE_LINK_LIBRARIES`. CMake forbids genex in exported custom properties and reserves `INTERFACE_*` for export, so the `$<0:...>` entry (evaluates to nothing at build time) is how the install path reaches imported targets from `find_package`.
 - `NAME` defaults to the target name and must be unique within the build graph. The same NAME resolving to the same real path (normalized, symlinks resolved) is fine; a different path is a configure error.
 - `install(TARGETS ... EXPORT)` users also get `install(DIRECTORY <dir> DESTINATION share/cphp/NAME)` from the function when `CPHP_INSTALL` is on (default on if the target is installed).
 
@@ -82,16 +85,16 @@ target_link_libraries(app PRIVATE mylib)       # no extra cphp call
 cphp_add_sources(app main.c.php)
 ```
 
-- `cphp_add_sources` collects `INTERFACE_CPHP_LIBS` over the target's link closure and passes each entry to the expander as `--lib NAME=path`.
+- `cphp_add_sources` collects libs over the target's link closure and passes each to the expander as `--lib NAME=path`. Libraries must be linked **before** `cphp_add_sources`; a deferred end-of-directory check makes a late link a configure error.
 - Templates import by logical name, never by path: `<?php require_once cphp('mylib/macros.php'); ?>`. The expander defines `cphp()` to resolve `NAME/rel` against the registered libs. A missing lib or file is a PHP error with the template line. Own-project helpers still use plain relative `require`.
 - Every resolved file is written to the depfile, so editing a producer's PHP re-expands consumers.
 - Library names give each producer its own namespace, so two libs can both ship `macros.php`.
 
-**Collection.** First try a generator expression over the link closure. Fallback: `cphp_add_sources` walks `INTERFACE_LINK_LIBRARIES` itself. Do not piggyback on `INTERFACE_INCLUDE_DIRECTORIES`, which would leak PHP dirs into C `-I`.
+**Collection.** `cphp_add_sources` walks the link closure itself (`LINK_LIBRARIES` of the target, `INTERFACE_LINK_LIBRARIES` transitively, through `$<LINK_ONLY:>`/`$<BUILD_INTERFACE:>` wrappers). A genex over a custom property is not used: custom properties are not transitive before CMake 3.30. Do not piggyback on `INTERFACE_INCLUDE_DIRECTORIES`, which would leak PHP dirs into C `-I`.
 
 **Editor**
 
-- At generate time CMake writes `<build>/cphp/libs.json` (`file(GENERATE)`), mapping each library NAME to its path. The proxy reads it to resolve `cphp('...')` for go-to-definition and to add the dirs to the PHP shadow's include paths for Intelephense/Phpactor.
+- At generate time CMake writes `<binary-dir>/cphp/libs.json` (`file(GENERATE)`, one per directory that calls `cphp_add_sources`): `{"cphpVersion": ..., "libs": {NAME: path}}`. Tooling compares `cphpVersion` with its own. The proxy reads it to resolve `cphp('...')` for go-to-definition and to add the dirs to the PHP shadow's include paths for Intelephense/Phpactor.
 - Shadows treat `cphp('x/y.php')` as an ordinary PHP call. No new syntax.
 
 **Trust:** exported PHP runs at consumer build time, with the same trust as any fetched `CMakeLists.txt`.
@@ -114,15 +117,15 @@ cphp_use_composer(app)       # app/composer.json + everything inherited from lin
 cphp_add_sources(app main.c.php)
 ```
 
-- **Participants.** `cphp_use_composer(<t>)` registers `<t>`'s `composer.json` directory on the target as `INTERFACE_CPHP_COMPOSER` (build/install interface, collected transitively like `INTERFACE_CPHP_LIBS`). Each participant's `composer.json` must have a `name`.
-- **Merged root.** For each target that calls `cphp_add_sources`, CMake generates `<binary-dir>/cphp/composer/<hash>/composer.json`: each participant is a `path` repository (`symlink: false`) required as `<name>: @dev`, `minimum-stability: dev`, `prefer-stable: true`. Participants are sorted so the file is deterministic. Targets with identical participant sets share one root (keyed by hash). The participant's own `require`, `autoload` and `repositories` are resolved by Composer, not by us.
-- **Lock.** Only the target's owning project has a lock: `LOCK`, default `<source-dir>/composer.lock`, committed. Libraries' own locks are ignored, as in Composer itself. A missing or stale lock is a configure error unless `CPHP_COMPOSER_UPDATE=ON`, which runs `composer update` and rewrites the lock.
-- **Install.** `composer install --no-interaction --no-dev --no-scripts --no-plugins` at configure time with the vendor dir in the build tree; skipped when the stamp (root hash + lock hash) matches. Lock and each participant's `composer.json` are `CMAKE_CONFIGURE_DEPENDS`.
+- **Participants.** `cphp_use_composer(<t>)` registers `<t>`'s `composer.json` directory on the target as `CPHP_COMPOSER` (collected by walking the link closure like `CPHP_LIBS` in 4.1; the same `INTERFACE_*`/genex export limits apply, so carry install paths the same way). Each participant's `composer.json` must have a `name`.
+- **Merged root.** For each target that calls `cphp_add_sources`, CMake generates `<binary-dir>/cphp/composer/<hash>/composer.json` (hash of participants + lock path + `ALLOW_SCRIPTS`; targets with identical inputs share a root). Participants are **staged as copies** (`*.php` + `composer.json`, excluding `vendor/`, `.git/`, `node_modules/` and the build tree) under `<root>/participants/<name>/` and referenced as `path` repositories by **relative** URL (`symlink: false`), required as `<name>: @dev`, `minimum-stability: dev`, `prefer-stable: true`. The root's `extra.cphp.participants` holds a fingerprint of every participant's `composer.json`. Staging makes Composer's lock content-hash machine-independent (it covers `repositories`, so absolute paths would break committed locks) and gives the path packages a stable version regardless of the source tree's git state; the fingerprint is how a changed participant `composer.json` makes the lock stale (Composer only hashes the root). The participant's own `require`, `autoload` and `repositories` are resolved by Composer.
+- **Lock.** Only the target's owning project has a lock: `LOCK`, default `<source-dir>/composer.lock`, committed. Libraries' own locks are ignored, as in Composer itself. A missing lock is a configure error unless `CPHP_COMPOSER_UPDATE=ON`, which runs `composer update` and rewrites the lock (the option is a cache variable: turn it off again afterwards). A stale lock is detected with `composer validate --check-lock` and is a configure error with the same remedy. Any change to a participant's `composer.json`, even cosmetic, makes the lock stale. The target that calls `cphp_add_sources` must itself call `cphp_use_composer` (it owns the lock).
+- **Install.** `composer install --no-interaction --no-dev --no-scripts --no-plugins` at configure time with the vendor dir in the build tree (`<root>/vendor`); skipped when the stamp (root json + lock + hashes of all participant files) matches, otherwise `vendor/` and `participants/` are wiped and rebuilt (Composer will not re-copy a locked path package). The lock, `composer.json` files and participant `*.php` files are `CMAKE_CONFIGURE_DEPENDS`, so editing one re-runs configure on the next build. The expansion command depends on `<root>/cphp-install.stamp`, so a reinstall re-expands.
 - **Composer itself.** `find_program(composer)` (`CPHP_COMPOSER_EXECUTABLE`). Missing -> configure error with install hint. Projects that never call `cphp_use_composer` never need it.
 - **Autoload.** The expander gets `--autoload <vendor>/autoload.php` and requires it before the template.
 - **Conflicts.** Reported by Composer's solver at configure time ("cannot be resolved", with the constraint chain). Fix by loosening a participant's constraint or pinning in the owning project's `composer.json`.
-- **Depfile.** Vendor files are not listed; the lock and `composer.json` files drive reinstall and re-expansion through CMake.
-- **Editor.** `libs.json` lists each target's vendor dir; the proxy adds it to the PHP shadow's include paths for Intelephense/Phpactor.
+- **Depfile.** Vendor files are filtered out of the depfile by the expander; the lock and `composer.json` files drive reinstall and re-expansion through CMake.
+- **Editor.** (planned) `libs.json` will list each target's vendor dir; the proxy adds it to the PHP shadow's include paths for Intelephense/Phpactor.
 - **Trust.** Scripts and plugins are off by default (`ALLOW_SCRIPTS` opts in). Packages still run arbitrary PHP at build time (section 7).
 
 ## 5. Editor tooling: shadow documents
@@ -165,7 +168,7 @@ Called from a project's `CMakeLists.txt`. It is a no-op unless the project is to
    - Failures are warnings, never configure errors. A stamp file `<build>/cphp/vscode-setup.stamp` (editor + version) avoids re-running on every configure.
 3. The install is a side effect outside the build tree, so it is never on by default, never runs from a nested (non-top-level) project, and the status line names the editor and version it installed.
 
-The extension ID is `CPHP_VSCODE_EXTENSION_ID` (publisher TBD). Distribution is Marketplace and Open VSX only; a GitHub-release `.vsix` download may be added later if offline use matters.
+The extension ID is `CPHP_VSCODE_EXTENSION_ID`, default `rechiekho.cphp` (publisher matches the GitHub owner; change before first publish if needed). Distribution is Marketplace and Open VSX only; a GitHub-release `.vsix` download may be added later if offline use matters.
 
 ## 7. Security
 
@@ -180,7 +183,7 @@ Expansion executes arbitrary PHP. Treat templates as build scripts. Editor-trigg
 
 ### 8.1 Windows / MSVC (designed in from the start)
 
-- **Paths.** `#line`, depfiles, maps and `libs.json` always use forward slashes. `#line` filenames escape backslashes and quotes if any remain. Comparisons are case-insensitive on Windows. Drive letters are escaped as the generator needs in depfiles (Ninja: `C\:/...`).
+- **Paths.** `#line`, depfiles, maps and `libs.json` always use forward slashes. `#line` filenames escape backslashes and quotes if any remain. Comparisons are case-insensitive on Windows. Depfile drive letters are currently left unescaped (Ninja's parser accepts `C:/`); **(verify)** for Makefile generators.
 - **Line endings.** The expander and shadows handle `\r\n`: newline counts are preserved per physical line, and a `\r\n` after `?>` is swallowed as one unit. Shadows keep the original newline bytes so offsets stay identical. LSP columns are UTF-16 code units on all platforms.
 - **Generators.** Ninja and Makefile generators use `DEPFILE`. Visual Studio generators ignore it: PHP includes are not tracked, so only listed `DEPENDS` trigger re-expansion. `cphp_add_sources` warns once and recommends Ninja. `CMAKE_GENERATOR` is otherwise not constrained.
 - **Commands.** `add_custom_command` uses `VERBATIM`; PHP is invoked as `php.exe` found by `find_program`. Editor CLIs on Windows are `code.cmd`/`cursor.cmd`; Composer is `composer.bat`/`composer.phar` run via php.
@@ -194,8 +197,5 @@ Expansion executes arbitrary PHP. Treat templates as build scripts. Editor-trigg
 - How clangd picks flags for a virtual/sibling URI.
 - clangd ignores `#line` for LSP positions.
 - `CMAKE_EXPORT_COMPILE_COMMANDS` behavior when set from a FetchContent subproject.
-- Composer: `path` repositories with `@dev` + `minimum-stability: dev` resolve cleanly alongside stable third-party packages; `composer install` flags a stale lock for a generated root; lock entries for `path` packages are portable across machines (fallback: only third-party entries are checked).
-- Composer: vendor dir redirect (`COMPOSER_VENDOR_DIR` or `config.vendor-dir` in the generated root) on Composer 2.x.
 - `DEPFILE` support across generators at the minimum CMake version (known: not honored by Visual Studio generators).
 - Windows: CRLF handling around `?>`, depfile drive-letter escaping per generator, clangd + `clang-cl` flag derivation for a sibling URI.
-- Custom `INTERFACE_CPHP_LIBS` is collected transitively through `target_link_libraries` via a genex. If not, `cphp_add_sources` walks `INTERFACE_LINK_LIBRARIES` itself. Same question for imported targets from `find_package`.

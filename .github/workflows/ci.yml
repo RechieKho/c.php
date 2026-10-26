@@ -1,0 +1,28 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCPHP_BUILD_EXAMPLES=ON
+      - name: Build
+        run: cmake --build build
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+      - name: Two-project example (FetchContent producer/consumer)
+        run: |
+          cmake -S tests/two-project/consumer -B build-two -G Ninja -DCPHP_ROOT="${{ github.workspace }}"
+          cmake --build build-two
+          ctest --test-dir build-two --output-on-failure

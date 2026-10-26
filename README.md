@@ -4,7 +4,7 @@
 
 Write C with embedded PHP in `*.c.php` files. A CMake step expands them before the compiler runs, and a VS Code extension gives you completion, diagnostics and navigation for both languages in the same file.
 
-> **Status: pre-alpha.** The CMake scaffolding exists; the expander and editor tooling do not yet. See [`remaining_tasks/`](remaining_tasks/REMAINING_TASKS.md).
+> **Status: pre-alpha.** The expander, CMake functions, PHP sharing and Composer support work; editor tooling does not yet. See [`remaining_tasks/`](remaining_tasks/REMAINING_TASKS.md).
 
 ## Usage
 
@@ -33,6 +33,29 @@ int op_<?= $name ?>(int a, int b) { return a <?= $sym ?> b; }
 Compiler errors and debugger steps point at `table.c.php`, not the generated file.
 
 **Requirements:** CMake >= 3.20, PHP >= 8.0 CLI, a C compiler. Editor tooling also needs clangd and a PHP language server (Intelephense or Phpactor).
+
+## Sharing PHP between projects
+
+```cmake
+# producer
+add_library(mylib ...)
+cphp_export_php(mylib DIRECTORY php NAME mylib)
+
+# consumer: link first, then add templates
+target_link_libraries(app PRIVATE mylib)
+cphp_add_sources(app main.c.php)
+```
+
+In a template: `<?php require_once cphp('mylib/macros.php'); ?>`.
+
+## Composer packages
+
+```cmake
+cphp_use_composer(app)               # app/composer.json (+ any linked library that also calls it)
+cphp_add_sources(app main.c.php)     # templates can use the packages
+```
+
+Create the lock once with `-DCPHP_COMPOSER_UPDATE=ON` and commit `composer.lock`. Needs Composer on `PATH`.
 
 ## Editor support
 

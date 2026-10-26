@@ -1,0 +1,1 @@
+{"name": "rechie/producer", "autoload": {"psr-4": {"Producer\\": "php-src/"}}}
