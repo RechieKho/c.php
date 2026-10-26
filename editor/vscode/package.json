@@ -190,7 +190,7 @@
   "main": "./out/extension.js",
   "repository": {
     "type": "git",
-    "url": "https://github.com/RichieKho/c.php"
+    "url": "https://github.com/RechieKho/c.php"
   },
   "capabilities": {
     "untrustedWorkspaces": {

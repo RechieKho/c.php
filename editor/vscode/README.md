@@ -1,6 +1,9 @@
 # c.php VS Code extension
 
-Contributes the `cphp` language (`*.c.php`, `*.h.php`), a TextMate grammar and problem matchers. The LSP client for `editor/lsp-proxy` is not implemented yet (Milestone 2).
+Language support for c.php templates (`*.c.php`, `*.h.php`): C with embedded PHP that CMake expands before compiling.
+
+- **Language features** from clangd (C parts) and a PHP language server (PHP parts), with locations mapped back to the template, via the bundled `editor/lsp-proxy`.
+- Needs `clangd`, `php` and a CMake build that exports `compile_commands.json` (c.php's `cphp_add_sources` does).
 
 - **Grammar** (`syntaxes/cphp.tmLanguage.json`): `source.c` outside, `source.php` inside `<?php ... ?>` / `<?= ... ?>`. Bare `<?` is C (the expander runs with `short_open_tag=0`).
 - **Problem matchers**: `$cphp-gcc`, `$cphp-msvc` (errors carry the template path via `#line`), `$cphp-php` (expander/PHP errors).
